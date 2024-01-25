@@ -1,12 +1,8 @@
 // Adjustable Parameters
-var warpZ = 32;         // Controls the warping effect on star positions
-var units = 2000;       // Number of stars in the star field
+var warpZ = 32;         // Controls the warping effect on star positions (velocidad (32))
+var units = 2000;       // Number of stars in the star field (cantidad (2000))
 var Z = 0.01 + (1 / 200 * 10);  // Controls the speed of stars moving towards the viewer
 var lineWidthFactor = 2; // Controls the factor by which the line width is multiplied
-
-var accelerationDuration = 500; // Duration of acceleration in milliseconds
-var accelerationSteps = 50;      // Number of steps during acceleration
-var accelerationIncrement = (1 / accelerationSteps) * (0.1 / 2); // Incremental change during acceleration
 
 var canvas = document.getElementById('starField');
 var ctx = canvas.getContext('2d');
@@ -30,16 +26,6 @@ for (var i = 0, n; i < units; i++) {
     resetstar(n);
     stars.push(n);
 }
-
-function accelerateStars() {
-    if (Z < 0.1) {
-        Z += accelerationIncrement;
-        setTimeout(accelerateStars, accelerationDuration / accelerationSteps);
-    }
-}
-
-// Start acceleration on page load
-accelerateStars();
 
 function drawStars() {
     ctx.globalAlpha = 0.8;
@@ -78,7 +64,4 @@ function drawStars() {
     requestAnimationFrame(drawStars);
 }
 
-// Delay the execution of drawStars until acceleration is complete
-setTimeout(function () {
-    drawStars();
-}, accelerationDuration);
+drawStars();
