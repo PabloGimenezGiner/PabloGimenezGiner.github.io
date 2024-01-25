@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contador de Tiempo Exponencial</title>
+</head>
+<body>
+
+  <h1>Contador de Tiempo Exponencial</h1>
+  
+  <p id="contador">0</p>
+  <p id="valorExponencial">0</p>
+
+  <script>
+    let contador = 0;
+
+    const vei = 0.1; // valorExponencialInicial (Solo x > 0)
+    const vef = 5000; // valorExponencialFinal
+
+    const cf = 30; // contadorFinal
+    const tt = 3 * 1000; // tiempoTotal (segundos * milisegundos)
+
+    const intervalId = setInterval(() => {
+      if (contador >= cf) {
+        // Detener el intervalo cuando se alcanza el contador final
+        clearInterval(intervalId);
+      } else {
+        // Ajuste para evitar dividir por 0
+        const porcentajeContador = contador / (cf - 1);
+        
+        // Calcular el valor exponencial en función del contador
+        const valorExponencial = vei * Math.pow(vef / vei, porcentajeContador);
+        
+        contador++;
+        
+        // Actualizar elementos HTML con los valores
+        document.getElementById('contador').innerText = `Contador: ${contador}`;
+        document.getElementById('valorExponencial').innerText = `Valor Exponencial: ${valorExponencial.toFixed(2)}`;
+      }
+    }, tt / cf); // Incrementa el contador en función del tiempo total y el contador final
+  </script>
+
+</body>
+</html>
