@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Star Field Background with Rotating Text</title>
+    <style>
+        /* Estilos del texto giratorio */
+        #outerCircleText {
+            font-style: italic;
+            font-weight: bold;
+            font-family: verdana, arial; /* Tipo de letra */
+            color: #fff; /* Cambiando el color del texto a blanco */
+            position: absolute;
+            top: 50%; /* Centrar verticalmente */
+            left: 50%; /* Centrar horizontalmente */
+            transform: translate(-50%, -50%); /* Centrar completamente */
+            z-index: 1; /* Asegurarse de que esté por encima del fondo de estrellas */
+        }
+        /* Estilos del fondo de estrellas */
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #000; /* Fondo negro */
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -1; /* Colocar el canvas detrás */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="starField"></canvas>
+    <div id="outerCircleText">
+        <div>
+            <div>
+                <h1>Bienvenido</h1> <!-- Título -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var canvas = document.getElementById('starField');
+        var ctx = canvas.getContext('2d');
+
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        var Rnd = Math.random,
+            Floor = Math.floor;
+
+        var warpZ = 32,
+            units = 5000,
+            Z = 0.01 + (1 / 200 * 10),
+            stars = [],
+            cycle = 0;
+
+        function resetstar(a) {
+            a.x = (Rnd() * width - (width * 0.5)) * warpZ;
+            a.y = (Rnd() * height - (height * 0.5)) * warpZ;
+            a.z = warpZ;
+            a.px = 0;
+            a.py = 0;
+        }
+
+        for (var i = 0, n; i < units; i++) {
+            n = {};
+            resetstar(n);
+            stars.push(n);
+        }
+
+        function drawStars() {
+            ctx.globalAlpha = 0.8;
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, width, height);
+
+            var cx = width / 2,
+                cy = height / 2;
+
+            var sat = Floor(Z * 500);
+            if (sat > 100) sat = 100;
+            for (var i = 0; i < units; i++) {
+                var n = stars[i],
+                    xx = n.x / n.z,
+                    yy = n.y / n.z,
+                    e = (1.0 / n.z + 1) * 1;
+
+                if (n.px) {
+                    ctx.strokeStyle = "hsl(" + ((cycle * i) % 1) + ",0%,60%)";
+                    ctx.lineWidth = e;
+                    ctx.beginPath();
+                    ctx.moveTo(xx + cx, yy + cy);
+                    ctx.lineTo(n.px + cx, n.py + cy);
+                    ctx.stroke();
+                }
+                n.px = xx;
+                n.py = yy;
+                n.z -= Z;
+
+                if (n.z < Z || n.px > width || n.py > height) {
+                    resetstar(n);
+                }
+            }
+            cycle += 0.03;
+            requestAnimationFrame(drawStars);
+        }
+
+        drawStars();
+
+        // Código del texto giratorio
+        (function(){
+            var msg = ". .. . .. . .. . ..";
+            var size = 12;
+            var circleY = 1; var circleX = 1;
+            var letter_spacing = 3;
+            var diameter = 20;
+            var rotation = 0.2;
+            var speed = 0.4;
+
+            if (!window.addEventListener && !window.attachEvent || !document.createElement) return;
+
+            msg = msg.split('');
+            var n = msg.length - 1, a = Math.round(size * diameter * 0.208333), currStep = 20,
+            ymouse = a * circleY + 20, xmouse = a * circleX + 20, y = [], x = [], Y = [], X = [],
+            o = document.createElement('div'), oi = document.createElement('div'),
+            b = document.compatMode && document.compatMode != "BackCompat"? document.documentElement : document.body;
+
+            mouse = function(e){
+                e = e || window.event;
+                ymouse = !isNaN(e.pageY)? e.pageY : e.clientY; // y-position
+                xmouse = !isNaN(e.pageX)? e.pageX : e.clientX; // x-position
+            };
+
+            makecircle = function(){
+                if(init.nopy){
+                    o.style.top = (b || document.body).scrollTop + 'px';
+                    o.style.left = (b || document.body).scrollLeft + 'px';
+                };
+                currStep -= rotation;
+                for (var d, i = n; i > -1; --i){
+                    d = document.getElementById('iemsg' + i).style;
+                    d.top = Math.round(y[i] + a * Math.sin((currStep + i) / letter_spacing) * circleY - 15) + 'px';
+                    d.left = Math.round(x[i] + a * Math.cos((currStep + i) / letter_spacing) * circleX) + 'px';
+                };
+            };
+
+            drag = function(){
+                y[0] = Y[0] += (ymouse - Y[0]) * speed;
+                x[0] = X[0] += (xmouse - 20 - X[0]) * speed;
+                for (var i = n; i > 0; --i){
+                    y[i] = Y[i] += (y[i-1] - Y[i]) * speed;
+                    x[i] = X[i] += (x[i-1] - X[i]) * speed;
+                };
+                makecircle();
+            };
+
+            init = function(){
+                if(!isNaN(window.pageYOffset)){
+                    ymouse += window.pageYOffset;
+                    xmouse += window.pageXOffset;
+                } else init.nopy = true;
+                for (var d, i = n; i > -1; --i){
+                    d = document.createElement('div'); d.id = 'iemsg' + i;
+                    d.style.height = d.style.width = a + 'px';
+                    d.appendChild(document.createTextNode(msg[i]));
+                    oi.appendChild(d); y[i] = x[i] = Y[i] = X[i] = 0;
+                };
+                o.appendChild(oi); document.body.appendChild(o);
+                setInterval(drag, 25);
+            };
+
+            ascroll = function(){
+                ymouse += window.pageYOffset;
+                xmouse += window.pageXOffset;
+                window.removeEventListener('scroll', ascroll, false);
+            };
+
+            o.id = 'outerCircleText'; o.style.fontSize = size + 'px';
+
+            if (window.addEventListener){
+                window.addEventListener('load', init, false);
+                document.addEventListener('mouseover', mouse, false);
+                document.addEventListener('mousemove', mouse, false);
+                if (/Apple/.test(navigator.vendor))
+                    window.addEventListener('scroll', ascroll, false);
+            }
+            else if (window.attachEvent){
+                window.attachEvent('onload', init);
+                document.attachEvent('onmousemove', mouse);
+            };
+        })();
+    </script>
+</body>
+</html>
