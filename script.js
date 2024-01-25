@@ -33,8 +33,17 @@ const intervalId = setInterval(() => {
 var canvas = document.getElementById('starField'); // Reference to the canvas element
 var ctx = canvas.getContext('2d'); // Context for drawing on the canvas
 
-canvas.width = window.innerWidth; // Set canvas width to window width
-canvas.height = window.innerHeight; // Set canvas height to window height
+// Function to update canvas dimensions on window resize
+function updateCanvasDimensions() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+
+// Event listener for window resize
+window.addEventListener('resize', updateCanvasDimensions);
+
+// Initialize canvas dimensions
+updateCanvasDimensions();
 
 var stars = []; // Array to store star objects
 var cycle = 0; // Variable to control color variation over time
