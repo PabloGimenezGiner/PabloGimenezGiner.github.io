@@ -1,7 +1,7 @@
 // Adjustable Parameters
-var warpZ = 32;         // Controls the warping effect on star positions (velocidad (32))
-var units = 2000;       // Number of stars in the star field (cantidad (2000))
-var Z = 0.01 + (1 / 200 * 10);  // Controls the speed of stars moving towards the viewer
+var warpZ = 32;         // Controls the warping effect on star positions (distancia de recorrido (32))
+var units = 1024;       // Number of stars in the star field (cantidad (2000))
+var Z = 0.01 + (1 / 200 * 10);  // Controls the speed of stars moving towards the viewer(velocidad)
 var lineWidthFactor = 2; // Controls the factor by which the line width is multiplied
 
 var canvas = document.getElementById('starField');
