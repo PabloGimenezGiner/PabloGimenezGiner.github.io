@@ -147,5 +147,33 @@ function updateCenterPosition() {
     }
 }
 
+// ... (previous code)
+
+// Function to handle both click and touch events
+function handleInputEvent(event) {
+    if (event.type === 'mousedown' || event.type === 'mouseup') {
+        // Handle mouse click events
+        isTouching = event.type === 'mousedown';
+        handleTouch(event);
+    } else if (event.type === 'touchstart' || event.type === 'touchmove') {
+        // Handle touch events
+        isTouching = true;
+        handleTouch(event.touches[0]);
+    } else if (event.type === 'touchend') {
+        // Handle touch end event
+        isTouching = false;
+    }
+}
+
+// Listen for both click and touch events
+window.addEventListener('mousedown', handleInputEvent);
+window.addEventListener('mouseup', handleInputEvent);
+window.addEventListener('touchstart', handleInputEvent);
+window.addEventListener('touchmove', handleInputEvent);
+window.addEventListener('touchend', handleInputEvent);
+
+// ... (remaining code)
+
+
 // Llamada a la función para actualizar la posición del centro en cada fotograma
 setInterval(updateCenterPosition, 1000 / 60); // Ajusta la frecuencia según sea necesario
