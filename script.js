@@ -147,8 +147,6 @@ function updateCenterPosition() {
     }
 }
 
-// ... (previous code)
-
 // Function to handle both click and touch events
 function handleInputEvent(event) {
     if (event.type === 'mousedown' || event.type === 'mouseup') {
@@ -171,8 +169,6 @@ window.addEventListener('mouseup', handleInputEvent);
 window.addEventListener('touchstart', handleInputEvent);
 window.addEventListener('touchmove', handleInputEvent);
 window.addEventListener('touchend', handleInputEvent);
-
-// ... (remaining code)
 
 
 // Llamada a la función para actualizar la posición del centro en cada fotograma
