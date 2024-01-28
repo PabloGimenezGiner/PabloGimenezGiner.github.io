@@ -147,28 +147,57 @@ function updateCenterPosition() {
     }
 }
 
-// Function to handle both click and touch events
-function handleInputEvent(event) {
-    if (event.type === 'mousedown' || event.type === 'mouseup') {
-        // Handle mouse click events
-        isTouching = event.type === 'mousedown';
-        handleTouch(event);
-    } else if (event.type === 'touchstart' || event.type === 'touchmove') {
-        // Handle touch events
-        isTouching = true;
-        handleTouch(event.touches[0]);
-    } else if (event.type === 'touchend') {
-        // Handle touch end event
-        isTouching = false;
+// ... (Previous code remains unchanged)
+
+window.addEventListener('mousedown', handleMouseDown);
+window.addEventListener('mouseup', handleMouseUp);
+window.addEventListener('mousemove', handleMouseMove);
+
+// Add touch events
+window.addEventListener('touchstart', handleTouchStart);
+window.addEventListener('touchend', handleTouchEnd);
+window.addEventListener('touchmove', handleTouchMove);
+
+// Combine mouse and touch event handling logic
+function handleMouseDown(event) {
+    isMouseDown = true;
+    handleInteraction(event.clientX, event.clientY);
+}
+
+function handleMouseUp() {
+    isMouseDown = false;
+}
+
+function handleMouseMove(event) {
+    if (isMouseDown) {
+        handleInteraction(event.clientX, event.clientY);
     }
 }
 
-// Listen for both click and touch events
-window.addEventListener('mousedown', handleInputEvent);
-window.addEventListener('mouseup', handleInputEvent);
-window.addEventListener('touchstart', handleInputEvent);
-window.addEventListener('touchmove', handleInputEvent);
-window.addEventListener('touchend', handleInputEvent);
+function handleTouchStart(event) {
+    isMouseDown = true;
+    const touch = event.touches[0];
+    handleInteraction(touch.clientX, touch.clientY);
+}
+
+function handleTouchEnd() {
+    isMouseDown = false;
+}
+
+function handleTouchMove(event) {
+    if (isMouseDown) {
+        const touch = event.touches[0];
+        handleInteraction(touch.clientX, touch.clientY);
+    }
+}
+
+function handleInteraction(clientX, clientY) {
+    const dx = clientX - window.innerWidth / 2;
+    const dy = clientY - window.innerHeight / 2;
+    angle = Math.atan2(dy, dx);
+}
+
+// ... (Remaining code remains unchanged)
 
 
 // Llamada a la función para actualizar la posición del centro en cada fotograma
