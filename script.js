@@ -1,4 +1,6 @@
-// Parámetros ajustables
+const targetCX = window.innerWidth / 2;
+const targetCY = window.innerHeight / 2;
+const animationDuration = 2000; // en milisegundos
 const warpZ = 32;
 const units = 1024;
 let valorExponencial = 0.6;
@@ -9,12 +11,14 @@ let cy = window.innerHeight / 2;
 let isMouseDown = false;
 let angle = 0;
 
-// Inicio de la aceleración
 let contador = 0;
 const vei = 2;
 const vef = 0.04;
 const cf = 60;
 const tt = 2 * 1000;
+
+let inactivityTimer;
+const inactivityDuration = 1000; // 1 segundos
 
 const intervalId = setInterval(() => {
     if (contador >= cf) {
@@ -55,6 +59,14 @@ for (var i = 0, n; i < units; i++) {
     stars.push(n);
 }
 
+function drawText() {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 24px verdana, arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("☼", cx, cy);
+}
+
 function drawStars() {
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = "#000";
@@ -85,6 +97,7 @@ function drawStars() {
     }
 
     cycle += 0.03;
+    drawText();
     requestAnimationFrame(drawStars);
 }
 
@@ -105,6 +118,47 @@ function updateCenterPosition() {
     }
 }
 
+function startInactivityTimer() {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+        resetCenterPosition();
+    }, inactivityDuration);
+}
+
+function resetCenterPosition() {
+    animateCenterPosition(cx, cy, targetCX, targetCY, animationDuration);
+}
+
+function animateCenterPosition(startX, startY, targetX, targetY, duration) {
+    let startTime;
+    
+    function animate(currentTime) {
+        if (!startTime) {
+            startTime = currentTime;
+        }
+
+        const progress = (currentTime - startTime) / duration;
+
+        if (progress < 1) {
+            cx = easeInOutQuad(progress, startX, targetX - startX, 1);
+            cy = easeInOutQuad(progress, startY, targetY - startY, 1);
+            requestAnimationFrame(animate);
+        } else {
+            cx = targetX;
+            cy = targetY;
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
+function easeInOutQuad(t, b, c, d) {
+    t /= d / 2;
+    if (t < 1) return c / 2 * t * t + b;
+    t--;
+    return -c / 2 * (t * (t - 2) - 1) + b;
+}
+
 window.addEventListener('mousedown', handleMouseDown);
 window.addEventListener('mouseup', handleMouseUp);
 window.addEventListener('mousemove', handleMouseMove);
@@ -115,32 +169,37 @@ window.addEventListener('touchmove', handleTouchMove);
 
 window.addEventListener('mousedown', function (event) {
     isMouseDown = true;
+    handleInteraction(event.clientX, event.clientY);
+    startInactivityTimer();
 });
 
 window.addEventListener('mouseup', function () {
     isMouseDown = false;
+    startInactivityTimer();
 });
 
 window.addEventListener('mousemove', function (event) {
     if (isMouseDown) {
-        const dx = event.clientX - window.innerWidth / 2;
-        const dy = event.clientY - window.innerHeight / 2;
-        angle = Math.atan2(dy, dx);
+        handleInteraction(event.clientX, event.clientY);
+        startInactivityTimer();
     }
 });
 
 function handleMouseDown(event) {
     isMouseDown = true;
     handleInteraction(event.clientX, event.clientY);
+    startInactivityTimer();
 }
 
 function handleMouseUp() {
     isMouseDown = false;
+    startInactivityTimer();
 }
 
 function handleMouseMove(event) {
     if (isMouseDown) {
         handleInteraction(event.clientX, event.clientY);
+        startInactivityTimer();
     }
 }
 
@@ -148,16 +207,19 @@ function handleTouchStart(event) {
     isMouseDown = true;
     const touch = event.touches[0];
     handleInteraction(touch.clientX, touch.clientY);
+    startInactivityTimer();
 }
 
 function handleTouchEnd() {
     isMouseDown = false;
+    startInactivityTimer();
 }
 
 function handleTouchMove(event) {
     if (isMouseDown) {
         const touch = event.touches[0];
         handleInteraction(touch.clientX, touch.clientY);
+        startInactivityTimer();
     }
 }
 

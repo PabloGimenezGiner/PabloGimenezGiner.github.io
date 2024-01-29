@@ -6,6 +6,13 @@ body {
     justify-content: center;
     background-color: #000;
     height: 100vh;
+/* Quitar seleccionar texto */
+    user-select: none;
+    -webkit-user-select: none; /* WebKit (Chrome, Safari) */
+    -moz-user-select: none; /* Gecko (Firefox) */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+/* Quitar y cambiar cursor */
+    cursor:crosshair;
 }
 
 canvas {
@@ -16,7 +23,7 @@ canvas {
     z-index: -1;
 }
 
-#outerCircleText {
+/*#outerCircleText {
     font-style: italic;
     font-weight: bold;
     font-family: verdana, arial;
@@ -31,7 +38,7 @@ canvas {
     justify-content: center;
     width: 100vw;
     height: 100vh;
-}
+}*/
 
 h1 {
     margin: 0;
