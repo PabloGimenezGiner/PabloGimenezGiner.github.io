@@ -1,6 +1,6 @@
 const targetCX = window.innerWidth / 2;
 const targetCY = window.innerHeight / 2;
-const animationDuration = 2000; // en milisegundos
+
 const warpZ = 32;
 const units = 1024;
 let valorExponencial = 0.6;
@@ -10,6 +10,7 @@ let cx = window.innerWidth / 2;
 let cy = window.innerHeight / 2;
 let isMouseDown = false;
 let angle = 0;
+let iconoDeFuga = "·";
 
 let contador = 0;
 const vei = 2;
@@ -18,7 +19,19 @@ const cf = 60;
 const tt = 2 * 1000;
 
 let inactivityTimer;
-const inactivityDuration = 1000; // 1 segundos
+const inactivityDuration = 1000;
+const animationDuration = 2000;
+
+var canvas = document.getElementById('starField');
+var ctx = canvas.getContext('2d');
+
+window.addEventListener('resize', updateCanvasDimensions);
+updateCanvasDimensions();
+
+var stars = [];
+var cycle = 0;
+
+setInterval(updateCenterPosition, 1000 / 60);
 
 const intervalId = setInterval(() => {
     if (contador >= cf) {
@@ -31,19 +44,10 @@ const intervalId = setInterval(() => {
     }
 }, tt / cf);
 
-var canvas = document.getElementById('starField');
-var ctx = canvas.getContext('2d');
-
 function updateCanvasDimensions() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
-
-window.addEventListener('resize', updateCanvasDimensions);
-updateCanvasDimensions();
-
-var stars = [];
-var cycle = 0;
 
 function resetStar(a) {
     a.x = (Math.random() * canvas.width - (canvas.width * 0.5)) * warpZ;
@@ -64,7 +68,7 @@ function drawText() {
     ctx.font = "bold 24px verdana, arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("☼", cx, cy);
+    ctx.fillText(iconoDeFuga, cx, cy);
 }
 
 function drawStars() {
@@ -228,5 +232,3 @@ function handleInteraction(clientX, clientY) {
     const dy = clientY - window.innerHeight / 2;
     angle = Math.atan2(dy, dx);
 }
-
-setInterval(updateCenterPosition, 1000 / 60);
