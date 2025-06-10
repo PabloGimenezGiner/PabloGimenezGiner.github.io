@@ -1,234 +1,247 @@
-const targetCX = window.innerWidth / 2;
-const targetCY = window.innerHeight / 2;
+const canvas = document.getElementById("spaceCanvas");
+const ctx = canvas.getContext("2d");
 
-const warpZ = 32;
-const units = 1024;
-let valorExponencial = 0.6;
-let Z = valorExponencial;
-const lineWidthFactor = 2;
-let cx = window.innerWidth / 2;
-let cy = window.innerHeight / 2;
-let isMouseDown = false;
-let angle = 0;
-let iconoDeFuga = "·";
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let contador = 0;
-const vei = 2;
-const vef = 0.04;
-const cf = 60;
-const tt = 2 * 1000;
+window.addEventListener("resize", () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
 
-let inactivityTimer;
-const inactivityDuration = 1000;
-const animationDuration = 2000;
+// Chunk-based star generation
+const chunkSize = 2048;
+const starsPerChunk = 256;
+let chunks = {}; // {'cx,cy,cz': [{x,y,z}, ...]}
 
-var canvas = document.getElementById('starField');
-var ctx = canvas.getContext('2d');
+function chunkKey(cx, cy, cz) {
+  return `${cx},${cy},${cz}`;
+}
 
-window.addEventListener('resize', updateCanvasDimensions);
-updateCanvasDimensions();
+function generateChunk(cx, cy, cz) {
+  const key = chunkKey(cx, cy, cz);
+  const starArray = [];
+  // Generate stars uniformly in the cube [cx*chunkSize, (cx+1)*chunkSize)
+  for (let i = 0; i < starsPerChunk; i++) {
+    const x = cx * chunkSize + Math.random() * chunkSize;
+    const y = cy * chunkSize + Math.random() * chunkSize;
+    const z = cz * chunkSize + Math.random() * chunkSize;
+    starArray.push({ x, y, z });
+  }
+  chunks[key] = starArray;
+}
 
-var stars = [];
-var cycle = 0;
-
-setInterval(updateCenterPosition, 1000 / 60);
-
-const intervalId = setInterval(() => {
-    if (contador >= cf) {
-        clearInterval(intervalId);
-    } else {
-        const porcentajeContador = contador / (cf - 1);
-        valorExponencial = vei * Math.pow(vef / vei, porcentajeContador);
-        Z = valorExponencial;
-        contador++;
+function unloadDistantChunks(camCx, camCy, camCz) {
+  for (const key in chunks) {
+    const [cx, cy, cz] = key.split(',').map(Number);
+    // Unload if more than 1 chunk away in any direction
+    if (Math.abs(cx - camCx) > 1 || Math.abs(cy - camCy) > 1 || Math.abs(cz - camCz) > 1) {
+      delete chunks[key];
     }
-}, tt / cf);
-
-function updateCanvasDimensions() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+  }
 }
 
-function resetStar(a) {
-    a.x = (Math.random() * canvas.width - (canvas.width * 0.5)) * warpZ;
-    a.y = (Math.random() * canvas.height - (canvas.height * 0.5)) * warpZ;
-    a.z = warpZ;
-    a.px = 0;
-    a.py = 0;
-}
-
-for (var i = 0, n; i < units; i++) {
-    n = {};
-    resetStar(n);
-    stars.push(n);
-}
-
-function drawText() {
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 24px verdana, arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(iconoDeFuga, cx, cy);
-}
-
-function drawStars() {
-    ctx.globalAlpha = 0.8;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    for (var i = 0; i < units; i++) {
-        var n = stars[i],
-            xx = n.x / n.z,
-            yy = n.y / n.z,
-            e = (1.0 / n.z + 1) * lineWidthFactor;
-
-        if (n.px) {
-            ctx.strokeStyle = "hsl(" + ((cycle * i) % 1) + ",0%,60%)";
-            ctx.lineWidth = e;
-            ctx.beginPath();
-            ctx.moveTo(xx + cx, yy + cy);
-            ctx.lineTo(n.px + cx, n.py + cy);
-            ctx.stroke();
+function updateChunks() {
+  const camCx = Math.floor(camera.x / chunkSize);
+  const camCy = Math.floor(camera.y / chunkSize);
+  const camCz = Math.floor(camera.z / chunkSize);
+  // Ensure 3x3x3 neighborhood
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const nx = camCx + dx;
+        const ny = camCy + dy;
+        const nz = camCz + dz;
+        const key = chunkKey(nx, ny, nz);
+        if (!chunks[key]) {
+          generateChunk(nx, ny, nz);
         }
-
-        n.px = xx;
-        n.py = yy;
-        n.z -= Z;
-
-        if (n.z < Z || n.px > canvas.width || n.py > canvas.height) {
-            resetStar(n);
-        }
+      }
     }
-
-    cycle += 0.03;
-    drawText();
-    requestAnimationFrame(drawStars);
+  }
+  unloadDistantChunks(camCx, camCy, camCz);
 }
 
-drawStars();
+const planets = [
+  { x: 0, y: 0, z: 300, r: 10, color: "#0cf", name: "Azulon" },
+  { x: 100, y: 20, z: 600, r: 20, color: "#f80", name: "Fulgor" },
+];
 
-function updateCenterPosition() {
-    if (isMouseDown) {
-        const maxDistance = Math.sqrt((window.innerWidth / 2) ** 2 + (window.innerHeight / 2) ** 2);
-        const normalizedDistance = Math.min(Math.sqrt((cx - window.innerWidth / 2) ** 2 + (cy - window.innerHeight / 2) ** 2) / maxDistance, 1);
-        const maxSpeed = 20;
-        const speed = maxSpeed * (1 - normalizedDistance);
+let camera = {
+  x: 0,
+  y: 0,
+  z: 0,
+  yaw: 0,
+  pitch: 0,
+  vx: 0,
+  vy: 0,
+  vz: 0,
+  speed: 0
+};
 
-        cx -= Math.cos(angle) * speed;
-        cy -= Math.sin(angle) * speed;
+const keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
 
-        cx = Math.max(Math.min(cx, window.innerWidth), 0);
-        cy = Math.max(Math.min(cy, window.innerHeight), 0);
-    }
+canvas.addEventListener("click", () => canvas.requestPointerLock());
+
+document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement === canvas) {
+    document.addEventListener("mousemove", mouseMove);
+  } else {
+    document.removeEventListener("mousemove", mouseMove);
+  }
+});
+
+function mouseMove(e) {
+  const sensitivity = 0.002;
+  camera.yaw -= e.movementX * sensitivity;
+  camera.pitch -= e.movementY * sensitivity;
+  camera.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.pitch));
 }
 
-function startInactivityTimer() {
-    clearTimeout(inactivityTimer);
-    inactivityTimer = setTimeout(() => {
-        resetCenterPosition();
-    }, inactivityDuration);
+function updateCamera() {
+  const speed = 10;
+  const cosY = Math.cos(camera.yaw);
+  const sinY = Math.sin(camera.yaw);
+  const cosP = Math.cos(camera.pitch);
+  const sinP = Math.sin(camera.pitch);
+
+  const dirX = cosP * -sinY;
+  const dirY = -sinP;
+  const dirZ = cosP * cosY;
+
+  const rightX = Math.cos(camera.yaw);
+  const rightZ = Math.sin(camera.yaw);
+
+  camera.vx = 0;
+  camera.vy = 0;
+  camera.vz = 0;
+
+  if (keys["KeyW"]) {
+    camera.vx += dirX * speed;
+    camera.vy += dirY * speed;
+    camera.vz += dirZ * speed;
+  }
+  if (keys["KeyS"]) {
+    camera.vx -= dirX * speed;
+    camera.vy -= dirY * speed;
+    camera.vz -= dirZ * speed;
+  }
+  if (keys["KeyA"]) {
+    camera.vx -= rightX * speed;
+    camera.vz -= rightZ * speed;
+  }
+  if (keys["KeyD"]) {
+    camera.vx += rightX * speed;
+    camera.vz += rightZ * speed;
+  }
+
+  camera.x += camera.vx;
+  camera.y += camera.vy;
+  camera.z += camera.vz;
+
+  camera.speed = Math.sqrt(
+    camera.vx * camera.vx +
+    camera.vy * camera.vy +
+    camera.vz * camera.vz
+  );
 }
 
-function resetCenterPosition() {
-    animateCenterPosition(cx, cy, targetCX, targetCY, animationDuration);
+function project3D(x, y, z) {
+  const dx = x - camera.x;
+  const dy = y - camera.y;
+  const dz = z - camera.z;
+
+  const cosY = Math.cos(-camera.yaw);
+  const sinY = Math.sin(-camera.yaw);
+  const cosP = Math.cos(-camera.pitch);
+  const sinP = Math.sin(-camera.pitch);
+
+  let tx = dx * cosY - dz * sinY;
+  let tz = dx * sinY + dz * cosY;
+  let ty = dy * cosP - tz * sinP;
+  tz = dy * sinP + tz * cosP;
+
+  const fov = 500;
+  const scale = fov / (tz || 1);
+  return {
+    x: canvas.width / 2 + tx * scale,
+    y: canvas.height / 2 + ty * scale,
+    visible: tz > 1,
+    scale
+  };
 }
 
-function animateCenterPosition(startX, startY, targetX, targetY, duration) {
-    let startTime;
-    
-    function animate(currentTime) {
-        if (!startTime) {
-            startTime = currentTime;
-        }
+function loop() {
+  updateCamera();
+  updateChunks();
 
-        const progress = (currentTime - startTime) / duration;
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        if (progress < 1) {
-            cx = easeInOutQuad(progress, startX, targetX - startX, 1);
-            cy = easeInOutQuad(progress, startY, targetY - startY, 1);
-            requestAnimationFrame(animate);
+  // Dibujar estrellas de todos los chunks activos
+  for (const key in chunks) {
+    for (const s of chunks[key]) {
+      const p = project3D(s.x, s.y, s.z);
+      if (p.visible) {
+        const sizeStars = 1.5;
+        const brightness = Math.min(1, p.scale * 2 + camera.speed * 0.02);
+        ctx.fillStyle = `rgba(255,255,255,${brightness})`;
+        const dx = s.x - camera.x;
+        const dy = s.y - camera.y;
+        const dz = s.z - camera.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist < 300) {
+          ctx.beginPath();
+          ctx.arc(p.x + sizeStars/2 * p.scale, p.y + sizeStars/2 * p.scale, sizeStars/2 * p.scale, 0, Math.PI * sizeStars*2);
+          ctx.fill();
         } else {
-            cx = targetX;
-            cy = targetY;
+          ctx.fillRect(p.x, p.y, sizeStars * p.scale, sizeStars * p.scale);
         }
+      }
     }
+  }
 
-    requestAnimationFrame(animate);
-}
+  // Dibujar planetas
+  for (const planet of planets) {
+    const p = project3D(planet.x, planet.y, planet.z);
+    if (p.visible) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, planet.r * p.scale, 0, Math.PI * 2);
+      ctx.fillStyle = planet.color;
+      ctx.fill();
 
-function easeInOutQuad(t, b, c, d) {
-    t /= d / 2;
-    if (t < 1) return c / 2 * t * t + b;
-    t--;
-    return -c / 2 * (t * (t - 2) - 1) + b;
-}
-
-window.addEventListener('mousedown', handleMouseDown);
-window.addEventListener('mouseup', handleMouseUp);
-window.addEventListener('mousemove', handleMouseMove);
-
-window.addEventListener('touchstart', handleTouchStart);
-window.addEventListener('touchend', handleTouchEnd);
-window.addEventListener('touchmove', handleTouchMove);
-
-window.addEventListener('mousedown', function (event) {
-    isMouseDown = true;
-    handleInteraction(event.clientX, event.clientY);
-    startInactivityTimer();
-});
-
-window.addEventListener('mouseup', function () {
-    isMouseDown = false;
-    startInactivityTimer();
-});
-
-window.addEventListener('mousemove', function (event) {
-    if (isMouseDown) {
-        handleInteraction(event.clientX, event.clientY);
-        startInactivityTimer();
+      const dx = planet.x - camera.x;
+      const dy = planet.y - camera.y;
+      const dz = planet.z - camera.z;
+      const distPlanet = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (distPlanet < 30) {
+        ctx.fillStyle = "white";
+        ctx.font = "20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(planet.name, canvas.width / 2, canvas.height * 0.2);
+      }
     }
-});
+  }
 
-function handleMouseDown(event) {
-    isMouseDown = true;
-    handleInteraction(event.clientX, event.clientY);
-    startInactivityTimer();
+  // Mostrar coordenadas en esquina superior derecha
+  ctx.fillStyle = "white";
+  ctx.font = "14px monospace";
+  ctx.textAlign = "right";
+  const coordText =
+    "X: " + camera.x.toFixed(1) +
+    " Y: " + camera.y.toFixed(1) +
+    " Z: " + camera.z.toFixed(1);
+  ctx.fillText(coordText, canvas.width - 10, 20);
+
+  requestAnimationFrame(loop);
 }
 
-function handleMouseUp() {
-    isMouseDown = false;
-    startInactivityTimer();
-}
-
-function handleMouseMove(event) {
-    if (isMouseDown) {
-        handleInteraction(event.clientX, event.clientY);
-        startInactivityTimer();
-    }
-}
-
-function handleTouchStart(event) {
-    isMouseDown = true;
-    const touch = event.touches[0];
-    handleInteraction(touch.clientX, touch.clientY);
-    startInactivityTimer();
-}
-
-function handleTouchEnd() {
-    isMouseDown = false;
-    startInactivityTimer();
-}
-
-function handleTouchMove(event) {
-    if (isMouseDown) {
-        const touch = event.touches[0];
-        handleInteraction(touch.clientX, touch.clientY);
-        startInactivityTimer();
-    }
-}
-
-function handleInteraction(clientX, clientY) {
-    const dx = clientX - window.innerWidth / 2;
-    const dy = clientY - window.innerHeight / 2;
-    angle = Math.atan2(dy, dx);
-}
+// Inicializar primer chunk y empezar bucle
+initStars = () => {};
+const initialCx = Math.floor(camera.x / chunkSize);
+const initialCy = Math.floor(camera.y / chunkSize);
+const initialCz = Math.floor(camera.z / chunkSize);
+generateChunk(initialCx, initialCy, initialCz);
+loop();
