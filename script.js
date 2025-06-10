@@ -10,7 +10,7 @@ window.addEventListener("resize", () => {
 });
 
 // Chunk-based star generation
-const chunkSize = 2048;
+const chunkSize = 4096;
 const starsPerChunk = 256;
 let chunks = {}; // {'cx,cy,cz': [{x,y,z}, ...]}
 
@@ -21,7 +21,6 @@ function chunkKey(cx, cy, cz) {
 function generateChunk(cx, cy, cz) {
   const key = chunkKey(cx, cy, cz);
   const starArray = [];
-  // Generate stars uniformly in the cube [cx*chunkSize, (cx+1)*chunkSize)
   for (let i = 0; i < starsPerChunk; i++) {
     const x = cx * chunkSize + Math.random() * chunkSize;
     const y = cy * chunkSize + Math.random() * chunkSize;
@@ -34,7 +33,6 @@ function generateChunk(cx, cy, cz) {
 function unloadDistantChunks(camCx, camCy, camCz) {
   for (const key in chunks) {
     const [cx, cy, cz] = key.split(',').map(Number);
-    // Unload if more than 1 chunk away in any direction
     if (Math.abs(cx - camCx) > 1 || Math.abs(cy - camCy) > 1 || Math.abs(cz - camCz) > 1) {
       delete chunks[key];
     }
@@ -45,7 +43,6 @@ function updateChunks() {
   const camCx = Math.floor(camera.x / chunkSize);
   const camCy = Math.floor(camera.y / chunkSize);
   const camCz = Math.floor(camera.z / chunkSize);
-  // Ensure 3x3x3 neighborhood
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       for (let dz = -1; dz <= 1; dz++) {
@@ -73,6 +70,7 @@ let camera = {
   z: 0,
   yaw: 0,
   pitch: 0,
+  roll: 0,
   vx: 0,
   vy: 0,
   vz: 0,
@@ -94,7 +92,7 @@ document.addEventListener("pointerlockchange", () => {
 });
 
 function mouseMove(e) {
-  const sensitivity = 0.002;
+  const sensitivity = 0.004;
   camera.yaw -= e.movementX * sensitivity;
   camera.pitch -= e.movementY * sensitivity;
   camera.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.pitch));
@@ -102,17 +100,38 @@ function mouseMove(e) {
 
 function updateCamera() {
   const speed = 10;
+  const rotationSpeed = 0.03;
+
+  // Calcular vector forward a partir de yaw/pitch
   const cosY = Math.cos(camera.yaw);
   const sinY = Math.sin(camera.yaw);
   const cosP = Math.cos(camera.pitch);
   const sinP = Math.sin(camera.pitch);
 
-  const dirX = cosP * -sinY;
-  const dirY = -sinP;
-  const dirZ = cosP * cosY;
+  let dirX = cosP * -sinY;
+  let dirY = -sinP;
+  let dirZ = cosP * cosY;
+  // Normalizar forward
+  const dirLen = Math.hypot(dirX, dirY, dirZ);
+  dirX /= dirLen; dirY /= dirLen; dirZ /= dirLen;
 
-  const rightX = Math.cos(camera.yaw);
-  const rightZ = Math.sin(camera.yaw);
+  // Calcular right base ignorando el roll: cross(worldUp, forward)
+  let baseRightX = dirZ;
+  let baseRightY = 0;
+  let baseRightZ = -dirX;
+  const baseLen = Math.hypot(baseRightX, baseRightY, baseRightZ);
+  baseRightX /= baseLen; baseRightY /= baseLen; baseRightZ /= baseLen;
+
+  // Rotar baseRight alrededor de forward por roll (fórmula de Rodrigues)
+  const cosR = Math.cos(camera.roll);
+  const sinR = Math.sin(camera.roll);
+  const dotUV = dirX * baseRightX + dirY * baseRightY + dirZ * baseRightZ;
+  const crossUVx = dirY * baseRightZ - dirZ * baseRightY;
+  const crossUVy = dirZ * baseRightX - dirX * baseRightZ;
+  const crossUVz = dirX * baseRightY - dirY * baseRightX;
+  const rightX = baseRightX * cosR + crossUVx * sinR + dirX * dotUV * (1 - cosR);
+  const rightY = baseRightY * cosR + crossUVy * sinR + dirY * dotUV * (1 - cosR);
+  const rightZ = baseRightZ * cosR + crossUVz * sinR + dirZ * dotUV * (1 - cosR);
 
   camera.vx = 0;
   camera.vy = 0;
@@ -130,44 +149,59 @@ function updateCamera() {
   }
   if (keys["KeyA"]) {
     camera.vx -= rightX * speed;
+    camera.vy -= rightY * speed;
     camera.vz -= rightZ * speed;
   }
   if (keys["KeyD"]) {
     camera.vx += rightX * speed;
+    camera.vy += rightY * speed;
     camera.vz += rightZ * speed;
+  }
+  if (keys["KeyQ"]) {
+    camera.roll -= rotationSpeed;
+  }
+  if (keys["KeyE"]) {
+    camera.roll += rotationSpeed;
   }
 
   camera.x += camera.vx;
   camera.y += camera.vy;
   camera.z += camera.vz;
 
-  camera.speed = Math.sqrt(
-    camera.vx * camera.vx +
-    camera.vy * camera.vy +
-    camera.vz * camera.vz
-  );
+  camera.speed = Math.hypot(camera.vx, camera.vy, camera.vz);
 }
 
 function project3D(x, y, z) {
-  const dx = x - camera.x;
-  const dy = y - camera.y;
-  const dz = z - camera.z;
+  // Trasladar coordenadas al espacio relativo a la cámara
+  let dx = x - camera.x;
+  let dy = y - camera.y;
+  let dz = z - camera.z;
 
+  // Rotar yaw
   const cosY = Math.cos(-camera.yaw);
   const sinY = Math.sin(-camera.yaw);
-  const cosP = Math.cos(-camera.pitch);
-  const sinP = Math.sin(-camera.pitch);
-
   let tx = dx * cosY - dz * sinY;
   let tz = dx * sinY + dz * cosY;
-  let ty = dy * cosP - tz * sinP;
-  tz = dy * sinP + tz * cosP;
+  let ty = dy;
 
+  // Rotar pitch
+  const cosP = Math.cos(-camera.pitch);
+  const sinP = Math.sin(-camera.pitch);
+  let ty2 = ty * cosP - tz * sinP;
+  tz = ty * sinP + tz * cosP;
+
+  // Rotar roll
+  const cosR2 = Math.cos(-camera.roll);
+  const sinR2 = Math.sin(-camera.roll);
+  let tx2 = tx * cosR2 - ty2 * sinR2;
+  let ty3 = tx * sinR2 + ty2 * cosR2;
+
+  // Proyección en perspectiva
   const fov = 500;
   const scale = fov / (tz || 1);
   return {
-    x: canvas.width / 2 + tx * scale,
-    y: canvas.height / 2 + ty * scale,
+    x: canvas.width / 2 + tx2 * scale,
+    y: canvas.height / 2 + ty3 * scale,
     visible: tz > 1,
     scale
   };
@@ -185,16 +219,22 @@ function loop() {
     for (const s of chunks[key]) {
       const p = project3D(s.x, s.y, s.z);
       if (p.visible) {
-        const sizeStars = 1.5;
+        const sizeStars = 2;
         const brightness = Math.min(1, p.scale * 2 + camera.speed * 0.02);
         ctx.fillStyle = `rgba(255,255,255,${brightness})`;
-        const dx = s.x - camera.x;
-        const dy = s.y - camera.y;
-        const dz = s.z - camera.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const dx2 = s.x - camera.x;
+        const dy2 = s.y - camera.y;
+        const dz2 = s.z - camera.z;
+        const dist = Math.hypot(dx2, dy2, dz2);
         if (dist < 300) {
           ctx.beginPath();
-          ctx.arc(p.x + sizeStars/2 * p.scale, p.y + sizeStars/2 * p.scale, sizeStars/2 * p.scale, 0, Math.PI * sizeStars*2);
+          ctx.arc(
+            p.x + (sizeStars / 2) * p.scale,
+            p.y + (sizeStars / 2) * p.scale,
+            (sizeStars / 2) * p.scale,
+            0,
+            Math.PI * 2
+          );
           ctx.fill();
         } else {
           ctx.fillRect(p.x, p.y, sizeStars * p.scale, sizeStars * p.scale);
@@ -212,10 +252,10 @@ function loop() {
       ctx.fillStyle = planet.color;
       ctx.fill();
 
-      const dx = planet.x - camera.x;
-      const dy = planet.y - camera.y;
-      const dz = planet.z - camera.z;
-      const distPlanet = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const dxp = planet.x - camera.x;
+      const dyp = planet.y - camera.y;
+      const dzp = planet.z - camera.z;
+      const distPlanet = Math.hypot(dxp, dyp, dzp);
       if (distPlanet < 30) {
         ctx.fillStyle = "white";
         ctx.font = "20px sans-serif";
@@ -238,7 +278,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// Inicializar primer chunk y empezar bucle
+// Inicializar primer chunk y comenzar bucle
 initStars = () => {};
 const initialCx = Math.floor(camera.x / chunkSize);
 const initialCy = Math.floor(camera.y / chunkSize);
