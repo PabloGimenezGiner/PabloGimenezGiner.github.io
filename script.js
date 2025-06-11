@@ -77,6 +77,9 @@ function updateCamera(dt) {
   if(keys["KeyS"]) move[2] -= 1;
   if(keys["KeyA"]) move[0] -= 1;
   if(keys["KeyD"]) move[0] += 1;
+  if(keys["KeyR"]) move[1] += 1; // subir
+  if(keys["KeyF"]) move[1] -= 1; // bajar
+
   const worldMove = rotateVectorByQuat(move, camera.q);
   camera.vx = worldMove[0]*speed;
   camera.vy = worldMove[1]*speed;
