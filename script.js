@@ -22,36 +22,75 @@ function quatMultiply(a, b) {
   const [ax, ay, az, aw] = a;
   const [bx, by, bz, bw] = b;
   return [
-    aw * bx + ax * bw + ay * bz - az * by,
-    aw * by - ax * bz + ay * bw + az * bx,
-    aw * bz + ax * by - ay * bx + az * bw,
-    aw * bw - ax * bx - ay * by - az * bz
+    aw*bx + ax*bw + ay*bz - az*by,
+    aw*by - ax*bz + ay*bw + az*bx,
+    aw*bz + ax*by - ay*bx + az*bw,
+    aw*bw - ax*bx - ay*by - az*bz
   ];
 }
 function quatNormalize(q) {
-  const [x, y, z, w] = q;
-  const len = Math.hypot(x, y, z, w) || 1;
-  return [x / len, y / len, z / len, w / len];
+  const [x,y,z,w] = q;
+  const len = Math.hypot(x,y,z,w) || 1;
+  return [x/len, y/len, z/len, w/len];
 }
 function rotateVectorByQuat(v, q) {
-  const [qx, qy, qz, qw] = q;
-  const [vx, vy, vz] = v;
-  const tx = 2 * (qy * vz - qz * vy);
-  const ty = 2 * (qz * vx - qx * vz);
-  const tz = 2 * (qx * vy - qy * vx);
+  const [qx,qy,qz,qw] = q;
+  const [vx,vy,vz] = v;
+  const tx = 2*(qy*vz - qz*vy);
+  const ty = 2*(qz*vx - qx*vz);
+  const tz = 2*(qx*vy - qy*vx);
   return [
-    vx + qw * tx + (qy * tz - qz * ty),
-    vy + qw * ty + (qz * tx - qx * tz),
-    vz + qw * tz + (qx * ty - qy * tx)
+    vx + qw*tx + (qy*tz - qz*ty),
+    vy + qw*ty + (qz*tx - qx*tz),
+    vz + qw*tz + (qx*ty - qy*tx)
   ];
 }
 
-// === 3. Estado de la Cámara ===
-let camera = { x:0, y:0, z:0, q:[0,0,0,1], vx:0, vy:0, vz:0, speed:0 };
+// === 3. Estado & Configuración ===
+let camera = { x:0,y:0,z:0, q:[0,0,0,1], vx:0,vy:0,vz:0, speed:0 };
 const keys = {};
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+let turboEnabled = false;
+let accFactor = 64;
+const NORMAL_ACC_MIN = 8;
+const WHEEL_STEP = NORMAL_ACC_MIN;
+const NORMAL_ACC_MAX = NORMAL_ACC_MIN * 8;
+const TURBO_ACC_MIN  = NORMAL_ACC_MIN * 8;
+const TURBO_ACC_MAX  = NORMAL_ACC_MAX * 8;   // 1024
+const BASE_DECEL     = NORMAL_ACC_MAX * 4;
+
+// === 3.1. Manejo de entradas ===
+// teclas
+document.addEventListener("keydown", e => { keys[e.code] = true; });
+document.addEventListener("keyup",   e => { keys[e.code] = false; });
+
+// click para lock pointer
 canvas.addEventListener("click", () => canvas.requestPointerLock());
+
+// toggle turbo con botón central
+canvas.addEventListener("mousedown", e => {
+  if (e.button === 1) {
+    turboEnabled = !turboEnabled;
+    // al cambiar de modo, ajustamos accFactor ×8 ó ÷8
+    accFactor = turboEnabled
+      ? Math.min(TURBO_ACC_MAX, accFactor * 8)
+      : Math.max(NORMAL_ACC_MIN, accFactor / 8);
+  }
+});
+
+// rueda del ratón para ajustar accFactor
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const delta = -Math.sign(e.deltaY);
+  // en turbo, cada paso = WHEEL_STEP * 8
+  const step = turboEnabled ? WHEEL_STEP * 8 : WHEEL_STEP;
+  accFactor += delta * step;
+  // imponemos límites según modo
+  const min = turboEnabled ? TURBO_ACC_MIN : NORMAL_ACC_MIN;
+  const max = turboEnabled ? TURBO_ACC_MAX : NORMAL_ACC_MAX;
+  accFactor = Math.max(min, Math.min(max, accFactor));
+}, { passive: false });
+
+// pointer lock & ratón
 document.addEventListener("pointerlockchange", () => {
   if (document.pointerLockElement === canvas)
     document.addEventListener("mousemove", mouseMove);
@@ -59,91 +98,141 @@ document.addEventListener("pointerlockchange", () => {
     document.removeEventListener("mousemove", mouseMove);
 });
 
-// === 4. Control de Ratón (rotación con yaw, pitch y roll) ===
+// === 4. Control de Ratón (yaw, pitch) ===
 function mouseMove(e) {
   const sens = 0.002;
-  const localUp = rotateVectorByQuat([0,1,0], camera.q);
-  const localRight = rotateVectorByQuat([1,0,0], camera.q);
-  const yawQ   = quatFromAxisAngle(localUp,    e.movementX * sens);
-  const pitchQ = quatFromAxisAngle(localRight, e.movementY * sens);
+  const up    = rotateVectorByQuat([0,1,0], camera.q);
+  const right = rotateVectorByQuat([1,0,0], camera.q);
+  const yawQ   = quatFromAxisAngle(up,    e.movementX * sens);
+  const pitchQ = quatFromAxisAngle(right, e.movementY * sens);
   camera.q = quatNormalize(quatMultiply(pitchQ, quatMultiply(yawQ, camera.q)));
 }
 
 // === 5. Movimiento de la Cámara ===
 function updateCamera(dt) {
-  const speed = 200 * dt;
+  const acc    = accFactor;
+  const maxSpd = turboEnabled ? 2048 : 512;
+  const decel  = BASE_DECEL * (turboEnabled ? 8 : 1);
+
+  // dirección de movimiento local
   let move = [0,0,0];
-  if(keys["KeyW"]) move[2] += 1;
-  if(keys["KeyS"]) move[2] -= 1;
-  if(keys["KeyA"]) move[0] -= 1;
-  if(keys["KeyD"]) move[0] += 1;
-  if(keys["KeyR"]) move[1] += 1; // subir
-  if(keys["KeyF"]) move[1] -= 1; // bajar
+  if (keys["KeyW"]) move[2] += 1;
+  if (keys["KeyS"]) move[2] -= 1;
+  if (keys["KeyA"]) move[0] -= 1;
+  if (keys["KeyD"]) move[0] += 1;
+  if (keys["KeyR"]) move[1] += 1;
+  if (keys["KeyF"]) move[1] -= 1;
+  const len = Math.hypot(...move);
+  if (len>0) move = move.map(m=>m/len);
 
-  const worldMove = rotateVectorByQuat(move, camera.q);
-  camera.vx = worldMove[0]*speed;
-  camera.vy = worldMove[1]*speed;
-  camera.vz = worldMove[2]*speed;
+  // aceleración en coordenadas globales
+  const worldAcc = rotateVectorByQuat(move, camera.q).map(v=>v * acc * dt);
 
+  // —–– Frenado mejorado: evita rebote —––
+  if (keys["ShiftLeft"]) {
+    const sv = [camera.vx, camera.vy, camera.vz];
+    const sp = Math.hypot(...sv);
+    if (sp > 0) {
+      // vector de desaceleración
+      const dv = sv.map(v => -v/sp * decel * dt);
+      // calcula velocidad candidata
+      const newV = [
+        camera.vx + dv[0],
+        camera.vy + dv[1],
+        camera.vz + dv[2]
+      ];
+      const newSp = Math.hypot(...newV);
+      // si sobrepasa la velocidad actual (rebote), para en seco
+      if (newSp > sp) {
+        camera.vx = camera.vy = camera.vz = 0;
+      } else {
+        camera.vx = newV[0];
+        camera.vy = newV[1];
+        camera.vz = newV[2];
+      }
+    }
+  } else {
+    // aceleración normal
+    camera.vx += worldAcc[0];
+    camera.vy += worldAcc[1];
+    camera.vz += worldAcc[2];
+    // limitamos velocidad
+    const sp = Math.hypot(camera.vx, camera.vy, camera.vz);
+    if (sp > maxSpd) {
+      const s = maxSpd / sp;
+      camera.vx *= s; camera.vy *= s; camera.vz *= s;
+    }
+  }
+
+  // roll (Q/E)
   const forward = rotateVectorByQuat([0,0,-1], camera.q);
-  if(keys["KeyQ"]) {
-    const rollQ = quatFromAxisAngle(forward,  0.03);
-    camera.q = quatNormalize(quatMultiply(rollQ, camera.q));
+  if (keys["KeyQ"]) {
+    const rQ = quatFromAxisAngle(forward,  0.03);
+    camera.q = quatNormalize(quatMultiply(rQ, camera.q));
   }
-  if(keys["KeyE"]) {
-    const rollQ = quatFromAxisAngle(forward, -0.03);
-    camera.q = quatNormalize(quatMultiply(rollQ, camera.q));
+  if (keys["KeyE"]) {
+    const rQ = quatFromAxisAngle(forward, -0.03);
+    camera.q = quatNormalize(quatMultiply(rQ, camera.q));
   }
 
-  camera.x += camera.vx;
-  camera.y += camera.vy;
-  camera.z += camera.vz;
-  camera.speed = Math.hypot(camera.vx,camera.vy,camera.vz);
+  // aplicamos posición
+  camera.x += camera.vx * dt;
+  camera.y += camera.vy * dt;
+  camera.z += camera.vz * dt;
+  camera.speed = Math.hypot(camera.vx, camera.vy, camera.vz);
 }
+
 
 // === 6. Proyección 3D a 2D ===
 function project3D(x,y,z) {
-  let dx=x-camera.x, dy=y-camera.y, dz=z-camera.z;
+  let dx = x - camera.x, dy = y - camera.y, dz = z - camera.z;
   const invQ = [-camera.q[0],-camera.q[1],-camera.q[2],camera.q[3]];
   [dx,dy,dz] = rotateVectorByQuat([dx,dy,dz], invQ);
-  const fov=500, scale=fov/(dz||0.0001);
-  return { x:canvas.width/2+dx*scale, y:canvas.height/2-dy*scale, visible:dz>1, scale };
+  const fov = 500, scale = fov/(dz||0.0001);
+  return { x: canvas.width/2 + dx*scale,
+           y: canvas.height/2 - dy*scale,
+           visible: dz>1, scale };
 }
 
 // === 7. Sistema de Estrellas (Chunks) ===
 const chunkSize = 4096, starsPerChunk = 256;
 let chunks = {};
-function chunkKey(cx, cy, cz) { return `${cx},${cy},${cz}`; }
-function generateChunk(cx, cy, cz) {
-  const key = chunkKey(cx, cy, cz), stars = [];
-  for (let i = 0; i < starsPerChunk; i++)
-    stars.push({ x: cx*chunkSize+Math.random()*chunkSize, y: cy*chunkSize+Math.random()*chunkSize, z: cz*chunkSize+Math.random()*chunkSize });
+function chunkKey(cx,cy,cz){ return `${cx},${cy},${cz}`; }
+function generateChunk(cx,cy,cz){
+  const key = chunkKey(cx,cy,cz), stars = [];
+  for(let i=0;i<starsPerChunk;i++){
+    stars.push({
+      x: cx*chunkSize + Math.random()*chunkSize,
+      y: cy*chunkSize + Math.random()*chunkSize,
+      z: cz*chunkSize + Math.random()*chunkSize
+    });
+  }
   chunks[key] = stars;
 }
-function unloadDistantChunks(cx, cy, cz) {
-  for (const key in chunks) {
-    const [x, y, z] = key.split(",").map(Number);
-    if (Math.abs(x - cx) > 1 || Math.abs(y - cy) > 1 || Math.abs(z - cz) > 1)
+function unloadDistantChunks(cx,cy,cz){
+  for(const key in chunks){
+    const [x,y,z] = key.split(",").map(Number);
+    if(Math.abs(x-cx)>1||Math.abs(y-cy)>1||Math.abs(z-cz)>1)
       delete chunks[key];
   }
 }
-function updateChunks() {
-  const cx = Math.floor(camera.x / chunkSize);
-  const cy = Math.floor(camera.y / chunkSize);
-  const cz = Math.floor(camera.z / chunkSize);
-  for (let dx = -1; dx <= 1; dx++)
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dz = -1; dz <= 1; dz++) {
+function updateChunks(){
+  const cx = Math.floor(camera.x/chunkSize),
+        cy = Math.floor(camera.y/chunkSize),
+        cz = Math.floor(camera.z/chunkSize);
+  for(let dx=-1; dx<=1; dx++)
+    for(let dy=-1; dy<=1; dy++)
+      for(let dz=-1; dz<=1; dz++){
         const key = chunkKey(cx+dx, cy+dy, cz+dz);
-        if (!chunks[key]) generateChunk(cx+dx, cy+dy, cz+dz);
+        if(!chunks[key]) generateChunk(cx+dx, cy+dy, cz+dz);
       }
-  unloadDistantChunks(cx, cy, cz);
+  unloadDistantChunks(cx,cy,cz);
 }
 
 // === 8. Planetas Fijos ===
 const planets = [
-  { x: 0, y: 0, z: 300, r: 10, color: '#0cf', name: 'Azulon' },
-  { x: 100, y: 20, z: 600, r: 20, color: '#f80', name: 'Fulgor' }
+  { x:0, y:0, z:300, r:10, color:'#0cf', name:'Azulon' },
+  { x:100, y:20, z:600, r:20, color:'#f80', name:'Fulgor' }
 ];
 
 // === 9. Bucle Principal de Render ===
@@ -153,53 +242,194 @@ function loop(now) {
   updateCamera(dt);
   updateChunks();
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
-  // Dibujar estrellas
+  // Dibujar estrellas…
   for (const key in chunks) for (const s of chunks[key]) {
     const p = project3D(s.x, s.y, s.z);
     if (!p.visible) continue;
-    const size = 2;
-    const bright = Math.min(1, p.scale * 2 + camera.speed * 0.02);
-    ctx.fillStyle = `rgba(255,255,255,${bright})`;
-    const dist = Math.hypot(s.x - camera.x, s.y - camera.y, s.z - camera.z);
-    if (dist < 300) {
+      const size = 2;
+      const bright = Math.min(1, p.scale * 2 + camera.speed * 0.02);
+      ctx.fillStyle = `rgba(255,255,255,${bright})`;
+      const dist = Math.hypot(s.x - camera.x, s.y - camera.y, s.z - camera.z);
+    if (dist < (size*200)) {
       ctx.beginPath();
-      ctx.arc(p.x, p.y, (size/2) * p.scale, 0, Math.PI * 2);
+      ctx.arc(p.x + (size/2) * p.scale, p.y + (size/2) * p.scale, (size/2) * p.scale, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.fillRect(p.x, p.y, size * p.scale, size * p.scale);
+      ctx.fillRect(p.x, p.y, (size*0.9) * p.scale, (size*0.9) * p.scale);
     }
   }
 
-  // Dibujar planetas
-  for (const pl of planets) {
-    const p = project3D(pl.x, pl.y, pl.z);
-    if (!p.visible) continue;
+  // Dibujar planetas…
+  for(const pl of planets){
+    const p = project3D(pl.x,pl.y,pl.z);
+    if(!p.visible) continue;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, pl.r * p.scale, 0, Math.PI * 2);
-    ctx.fillStyle = pl.color;
-    ctx.fill();
-    const dist = Math.hypot(pl.x - camera.x, pl.y - camera.y, pl.z - camera.z);
-    if (dist < pl.r * 2) {
-      ctx.fillStyle = 'white';
-      ctx.font = '20px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(pl.name, canvas.width / 2, canvas.height * 0.2);
+    ctx.arc(p.x,p.y,pl.r*p.scale,0,Math.PI*2);
+    ctx.fillStyle = pl.color; ctx.fill();
+    const dist = Math.hypot(pl.x-camera.x, pl.y-camera.y, pl.z-camera.z);
+    if(dist < pl.r*2){
+      ctx.fillStyle='white';
+      ctx.font='20px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(pl.name, canvas.width/2, canvas.height*0.2);
     }
   }
 
-  // Coordenadas en pantalla
-  ctx.fillStyle = 'white';
-  ctx.font = '14px monospace';
-  ctx.textAlign = 'right';
-  ctx.fillText(`X:${camera.x.toFixed(1)} Y:${camera.y.toFixed(1)} Z:${camera.z.toFixed(1)}`, canvas.width - 10, 20);
+  // HUD textos
+  ctx.fillStyle='white';
+  ctx.font='14px monospace';
+  ctx.textAlign='right';
+  ctx.fillText(`X:${camera.x.toFixed(1)} Y:${camera.y.toFixed(1)} Z:${camera.z.toFixed(1)}`,
+               canvas.width-10, 20);
+
+  // HUD central inferior - Velocidad y Potencia
+  ctx.textAlign = 'center';
+
+  // Velocidad actual en grande
+  const speedFontSize = 96;
+  const speedY = canvas.height - 72;
+  const centerX = canvas.width / 2;
+  ctx.fillStyle = keys["ShiftLeft"] ? '#f55' : 'white';
+  ctx.font = `${speedFontSize}px monospace`;
+  ctx.fillText(camera.speed.toFixed(0), centerX, speedY);
+
+  // Si se está frenando: dibujar rectángulos fijos a los lados
+  if (keys["ShiftLeft"]) {
+    const rectH = speedFontSize *0.8;
+    const rectW = rectH / 2;
+    const rectY = speedY - speedFontSize * 0.7;
+    const radius = 8;
+
+    // Posiciones fijas respecto al centro
+    const offsetX = 192;
+    const leftX = centerX - offsetX - rectW;
+    const rightX = centerX + offsetX;
+
+    [leftX, rightX].forEach(x => {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, rectY);
+      ctx.lineTo(x + rectW - radius, rectY);
+      ctx.quadraticCurveTo(x + rectW, rectY, x + rectW, rectY + radius);
+      ctx.lineTo(x + rectW, rectY + rectH - radius);
+      ctx.quadraticCurveTo(x + rectW, rectY + rectH, x + rectW - radius, rectY + rectH);
+      ctx.lineTo(x + radius, rectY + rectH);
+      ctx.quadraticCurveTo(x, rectY + rectH, x, rectY + rectH - radius);
+      ctx.lineTo(x, rectY + radius);
+      ctx.quadraticCurveTo(x, rectY, x + radius, rectY);
+      ctx.closePath();
+      ctx.fillStyle = '#f55';
+      ctx.fill();
+    });
+  }
+
+
+  // HUD central inferior – Barra de potencia segmentada sin fondo
+  const barWidthMax = 512;
+  const barHeight   = 32;
+  const gap         = 8;
+  const radius      = 4;
+  const x0 = (canvas.width - barWidthMax) / 2;
+  const y0 = canvas.height - 16 - barHeight;
+
+  const minAcc = turboEnabled ? TURBO_ACC_MIN : NORMAL_ACC_MIN;
+  const maxAcc = turboEnabled ? TURBO_ACC_MAX : NORMAL_ACC_MAX;
+  const step   = turboEnabled ? WHEEL_STEP * 8 : WHEEL_STEP;
+  const totalSegments  = Math.floor((maxAcc - minAcc) / step);
+  const currentSegment = Math.floor((accFactor - minAcc) / step);
+
+  const segW = (barWidthMax - gap * (totalSegments - 1)) / totalSegments;
+
+  // Color según modo
+  ctx.fillStyle = turboEnabled ? '#f90' : '#09f';
+
+  // Dibujar segmentos activos
+  for (let i = 0; i < currentSegment; i++) {
+    const xi = x0 + i * (segW + gap);
+    ctx.beginPath();
+    ctx.moveTo(xi + radius, y0);
+    ctx.lineTo(xi + segW - radius, y0);
+    ctx.quadraticCurveTo(xi + segW, y0, xi + segW, y0 + radius);
+    ctx.lineTo(xi + segW, y0 + barHeight - radius);
+    ctx.quadraticCurveTo(xi + segW, y0 + barHeight, xi + segW - radius, y0 + barHeight);
+    ctx.lineTo(xi + radius, y0 + barHeight);
+    ctx.quadraticCurveTo(xi, y0 + barHeight, xi, y0 + barHeight - radius);
+    ctx.lineTo(xi, y0 + radius);
+    ctx.quadraticCurveTo(xi, y0, xi + radius, y0);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Si está al mínimo: dibujar dos marcadores finos con esquinas redondeadas
+  if (currentSegment === 0) {
+    const markerW = barHeight / 4;
+    const markerH = barHeight;
+    const positions = [x0, x0 + barWidthMax - markerW];
+
+    for (const xi of positions) {
+      ctx.beginPath();
+      ctx.moveTo(xi + radius, y0);
+      ctx.lineTo(xi + markerW - radius, y0);
+      ctx.quadraticCurveTo(xi + markerW, y0, xi + markerW, y0 + radius);
+      ctx.lineTo(xi + markerW, y0 + markerH - radius);
+      ctx.quadraticCurveTo(xi + markerW, y0 + markerH, xi + markerW - radius, y0 + markerH);
+      ctx.lineTo(xi + radius, y0 + markerH);
+      ctx.quadraticCurveTo(xi, y0 + markerH, xi, y0 + markerH - radius);
+      ctx.lineTo(xi, y0 + radius);
+      ctx.quadraticCurveTo(xi, y0, xi + radius, y0);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // ── Retículo central semitransparente con palitos integrados ──
+const cx = canvas.width  / 2;
+const cy = canvas.height / 2;
+const radio = 24;                   // radio = n diámetro / 2
+const segments = 3;                 // n partes
+const gapo = 0.64;                   // espacio angular entre segmentos (radianes)
+const lineWidth = 6;
+const total = 2 * Math.PI;
+const angleOffset = Math.PI / 2;    // empieza desde abajo
+const radioToCenter = 12;
+
+ctx.save();
+ctx.lineWidth = lineWidth;
+ctx.strokeStyle = 'rgba(127, 127, 127, 0.48)';
+ctx.lineCap = 'round';
+
+for (let i = 0; i < segments; i++) {
+  // ángulos de inicio y fin del segmento
+  const start    = angleOffset + i * (total / segments) + gapo / 2;
+  const end      = angleOffset + (i + 1) * (total / segments) - gapo / 2;
+  // ángulo medio para el palito
+  const midAngle = angleOffset + (i + 0.5) * (total / segments);
+
+  // coordenadas del palito
+  const xOuter = cx + Math.cos(midAngle) * radio;
+  const yOuter = cy + Math.sin(midAngle) * radio;
+  const xInner = cx + Math.cos(midAngle) * (radio - radioToCenter);
+  const yInner = cy + Math.sin(midAngle) * (radio - radioToCenter);
+
+  ctx.beginPath();
+  // arco del segmento
+  ctx.arc(cx, cy, radio, start, end);
+  // palito hacia el centro
+  ctx.moveTo(xOuter, yOuter);
+  ctx.lineTo(xInner, yInner);
+  ctx.stroke();
+}
+
+ctx.restore();
+
+
   requestAnimationFrame(loop);
 }
 
 // === 10. Inicialización ===
-const icx = Math.floor(camera.x / chunkSize);
-const icy = Math.floor(camera.y / chunkSize);
-const icz = Math.floor(camera.z / chunkSize);
+const icx = Math.floor(camera.x/chunkSize),
+      icy = Math.floor(camera.y/chunkSize),
+      icz = Math.floor(camera.z/chunkSize);
 generateChunk(icx, icy, icz);
 requestAnimationFrame(loop);
