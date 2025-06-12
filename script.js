@@ -277,13 +277,19 @@ function loop(now) {
     }
   }
 
-  // HUD textos
-  ctx.fillStyle='white';
-  ctx.font='14px monospace';
-  ctx.textAlign='right';
-  ctx.fillText(`X:${camera.x.toFixed(1)} Y:${camera.y.toFixed(1)} Z:${camera.z.toFixed(1)}`,
-               canvas.width-10, 20);
-
+  // HUD textos – Coordenadas arriba derecha (coloreadas)
+  ctx.save();
+  ctx.font = '14px monospace';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#f55';
+  ctx.fillText(`${camera.x.toFixed(1)} :X `, canvas.width - 10, 10);
+  ctx.fillStyle = '#5f5';
+  ctx.fillText(`${camera.y.toFixed(1)} :Y `, canvas.width - 10, 30);
+  ctx.fillStyle = '#55f';
+  ctx.fillText(`${camera.z.toFixed(1)} :Z `, canvas.width - 10, 50);
+  ctx.restore();
+        
   // HUD central inferior - Velocidad y Potencia
   ctx.textAlign = 'center';
 
@@ -389,7 +395,7 @@ const cy = canvas.height / 2;
 const radio = 24;                   // radio = n diámetro / 2
 const segments = 3;                 // n partes
 const gapo = 0.64;                   // espacio angular entre segmentos (radianes)
-const lineWidth = 6;
+const lineWidth = 4.8;
 const total = 2 * Math.PI;
 const angleOffset = Math.PI / 2;    // empieza desde abajo
 const radioToCenter = 12;
@@ -421,7 +427,113 @@ for (let i = 0; i < segments; i++) {
   ctx.stroke();
 }
 
+// ── Giroscopio visual arriba-centro con hueco central ──
+const gyroSize = 96;
+const gyroCX   = canvas.width / 2;
+const gyroCY   = 96;
+const axisLen  = gyroSize / 2;
+const gapFrac  = 0.64;             // fracción del radio a dejar vacía
+const gapoo      = axisLen * gapFrac;
+const arrowOff = 8;
+const arrowSz  = 6;
+
+ctx.save();
+ctx.translate(gyroCX, gyroCY);
+
+// Calcula ejes rotados
+const xA = rotateVectorByQuat([1, 0, 0], camera.q);
+const yA = rotateVectorByQuat([0, 1, 0], camera.q);
+const zA = rotateVectorByQuat([0, 0, -1], camera.q);
+
+// Dibuja punta de flecha positiva
+function drawArrowhead(x, y, dx, dy) {
+  const px = x + dx * arrowOff;
+  const py = y + dy * arrowOff;
+  const perpX = -dy;
+  const perpY = dx;
+  const tipX = px + dx * arrowSz;
+  const tipY = py + dy * arrowSz;
+  const leftX  = px + perpX * arrowSz * 1;
+  const leftY  = py + perpY * arrowSz * 1;
+  const rightX = px - perpX * arrowSz * 1;
+  const rightY = py - perpY * arrowSz * 1;
+  ctx.beginPath();
+  ctx.moveTo(leftX, leftY);
+  ctx.lineTo(tipX,   tipY);
+  ctx.lineTo(rightX, rightY);
+  ctx.stroke();
+}
+
+// Dibuja palito negativo
+function drawNegativeBar(x, y, dx, dy) {
+  const px = x - dx * arrowOff;
+  const py = y - dy * arrowOff;
+  const perpX = -dy;
+  const perpY = dx;
+  const half = 4;
+  ctx.beginPath();
+  ctx.moveTo(px + perpX * half, py + perpY * half);
+  ctx.lineTo(px - perpX * half, py - perpY * half);
+  ctx.stroke();
+}
+
+// Dibuja un eje completo con hueco central
+function drawFullAxis(dir, color) {
+  const dx = dir[0];
+  const dy = -dir[1];         // invertido en canvas
+  const len = axisLen;
+
+  // coordenadas extremo positivo y negativo
+  const xPos = dx * len, yPos = dy * len;
+  const xNeg = -dx * len, yNeg = -dy * len;
+
+  // coordenadas del inicio/final de gap
+  const xGapPos = dx * gapoo,  yGapPos = dy * gapoo;
+  const xGapNeg = -dx * gapoo, yGapNeg = -dy * gapoo;
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2.5;
+
+  // segmento negativo (desde gapNeg hasta extremo negativo)
+  ctx.beginPath();
+  ctx.moveTo(xGapNeg, yGapNeg);
+  ctx.lineTo(xNeg,    yNeg);
+  ctx.stroke();
+
+  // segmento positivo (desde gapPos hasta extremo positivo)
+  ctx.beginPath();
+  ctx.moveTo(xGapPos, yGapPos);
+  ctx.lineTo(xPos,    yPos);
+  ctx.stroke();
+
+  // flecha en el extremo positivo
+  drawArrowhead(xPos, yPos, dx, dy);
+
+  // palito en el extremo negativo
+  drawNegativeBar(xNeg, yNeg, dx, dy);
+}
+
+// Dibuja los tres ejes
+drawFullAxis(xA, '#f55');
+drawFullAxis(yA, '#5f5');
+drawFullAxis(zA, '#55f');
+
+// circunferencia en el plano XZ para referencia
+ctx.globalAlpha = 0.16;
+ctx.strokeStyle = '#aaa';
+ctx.beginPath();
+for (let a = 0; a <= Math.PI * 2; a += 0.1) {
+  const px = Math.cos(a), pz = Math.sin(a);
+  const [dx, dy] = rotateVectorByQuat([px, 0, pz], camera.q);
+  const x = dx * axisLen * ((1 - gapFrac) / 2 + gapFrac);
+  const y = -dy * axisLen * ((1 - gapFrac) / 2 + gapFrac);
+  if (a === 0) ctx.moveTo(x, y);
+  else         ctx.lineTo(x, y);
+}
+ctx.stroke();
+
 ctx.restore();
+
 
 
   requestAnimationFrame(loop);
