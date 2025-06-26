@@ -1,64 +1,61 @@
-//import { renderHUD } from './hud.js';
+import { quatFromAxisAngle, quatMultiply, quatNormalize, rotateVectorByQuat } from './quaternion.js';
+import { normAccMin, chunkSize, starsPerChunk} from './variables.js';
+//import { drawPlanets } from './hud/objets.js';
+import { drawHudSpeed } from './hud/hudSpeed.js';
+import { drawHudCoords } from './hud/hudCoords.js';
+import { drawHudReticle } from './hud/hudReticle.js';
+//import { drawHudGyro } from './hud/hudGyro.js';
+
+//import { normAccMin, mouseWheelStep, normAccMax, turbAccMin, turbAccMax, normBaseDecel, chunkSize, starsPerChunk, camera, keys, turboEnabled, accFactor, chunks } from './variables.js';
+//import { setupInputs, setMouseMoveHandler} from './input.js';
 
 // === Space Camera System ===
 // Author: Tú
 // Descripción: Explorador 3D con cámara libre en canvas, rotaciones con cuaterniones y chunk dinámico de estrellas
 
+// === 1. Configuración de Constantes y Estado Global ===
+
+export const mouseWheelStep = normAccMin;
+export const normAccMax     = normAccMin * 8;
+export const turbAccMin    = normAccMin * 8;
+export const turbAccMax    = normAccMax * 8;   // 1024
+export const normBaseDecel  = normAccMax * 4;
+
+let camera = { x:0, y:0, z:0, q:[0,0,0,1], vx:0, vy:0, vz:0, speed:0 };
+let keys = {};
+let turboEnabled = false;
+let accFactor = 64;
+let chunks = {};
+
+// Planetas fijos en la escena
+const planets = [
+  { x:0,   y:0,  z:300, r:10, color:'#0cf', name:'Azulon' },
+  { x:100, y:20, z:600, r:20, color:'#f80', name:'Fulgor' }
+];
+
 // === 1. Setup del Canvas ===
 const canvas = document.getElementById("spaceCanvas");
 const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-window.addEventListener("resize", () => {
+
+function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
-});
-
-// === 2. Utilidades de Cuaterniones ===
-function quatFromAxisAngle(axis, angle) {
-  const half = angle / 2;
-  const s = Math.sin(half);
-  return [axis[0] * s, axis[1] * s, axis[2] * s, Math.cos(half)];
-}
-function quatMultiply(a, b) {
-  const [ax, ay, az, aw] = a;
-  const [bx, by, bz, bw] = b;
-  return [
-    aw*bx + ax*bw + ay*bz - az*by,
-    aw*by - ax*bz + ay*bw + az*bx,
-    aw*bz + ax*by - ay*bx + az*bw,
-    aw*bw - ax*bx - ay*by - az*bz
-  ];
-}
-function quatNormalize(q) {
-  const [x,y,z,w] = q;
-  const len = Math.hypot(x,y,z,w) || 1;
-  return [x/len, y/len, z/len, w/len];
-}
-function rotateVectorByQuat(v, q) {
-  const [qx,qy,qz,qw] = q;
-  const [vx,vy,vz] = v;
-  const tx = 2*(qy*vz - qz*vy);
-  const ty = 2*(qz*vx - qx*vz);
-  const tz = 2*(qx*vy - qy*vx);
-  return [
-    vx + qw*tx + (qy*tz - qz*ty),
-    vy + qw*ty + (qz*tx - qx*tz),
-    vz + qw*tz + (qx*ty - qy*tx)
-  ];
 }
 
-// === 3. Estado & Configuración ===
-let camera = { x:0,y:0,z:0, q:[0,0,0,1], vx:0,vy:0,vz:0, speed:0 };
-const keys = {};
-let turboEnabled = false;
-let accFactor = 64;
-const NORMAL_ACC_MIN = 8;
-const WHEEL_STEP = NORMAL_ACC_MIN;
-const NORMAL_ACC_MAX = NORMAL_ACC_MIN * 8;
-const TURBO_ACC_MIN  = NORMAL_ACC_MIN * 8;
-const TURBO_ACC_MAX  = NORMAL_ACC_MAX * 8;   // 1024
-const BASE_DECEL     = NORMAL_ACC_MAX * 4;
+window.addEventListener('resize', resize);
+resize();
+
+// === 2. Cuaterniones ===
+const axis = [0, 1, 0];
+const angle = Math.PI / 2;
+
+let q = quatFromAxisAngle(axis, angle);
+q = quatNormalize(q);
+
+const v = [1, 0, 0];
+const rotated = rotateVectorByQuat(v, q);
+
+console.log(rotated);
 
 // === 3.1. Manejo de entradas ===
 // teclas
@@ -74,8 +71,8 @@ canvas.addEventListener("mousedown", e => {
     turboEnabled = !turboEnabled;
     // al cambiar de modo, ajustamos accFactor ×8 ó ÷8
     accFactor = turboEnabled
-      ? Math.min(TURBO_ACC_MAX, accFactor * 8)
-      : Math.max(NORMAL_ACC_MIN, accFactor / 8);
+      ? Math.min(turbAccMax, accFactor * 8)
+      : Math.max(normAccMin, accFactor / 8);
   }
 });
 
@@ -83,12 +80,12 @@ canvas.addEventListener("mousedown", e => {
 canvas.addEventListener("wheel", e => {
   e.preventDefault();
   const delta = -Math.sign(e.deltaY);
-  // en turbo, cada paso = WHEEL_STEP * 8
-  const step = turboEnabled ? WHEEL_STEP * 8 : WHEEL_STEP;
+  // en turbo, cada paso = mouseWheelStep * 8
+  const step = turboEnabled ? mouseWheelStep * 8 : mouseWheelStep;
   accFactor += delta * step;
   // imponemos límites según modo
-  const min = turboEnabled ? TURBO_ACC_MIN : NORMAL_ACC_MIN;
-  const max = turboEnabled ? TURBO_ACC_MAX : NORMAL_ACC_MAX;
+  const min = turboEnabled ? turbAccMin : normAccMin;
+  const max = turboEnabled ? turbAccMax : normAccMax;
   accFactor = Math.max(min, Math.min(max, accFactor));
 }, { passive: false });
 
@@ -100,7 +97,7 @@ document.addEventListener("pointerlockchange", () => {
     document.removeEventListener("mousemove", mouseMove);
 });
 
-// === 4. Control de Ratón (yaw, pitch) ===
+// control de Ratón (yaw, pitch)
 function mouseMove(e) {
   const sens = 0.002;
   const up    = rotateVectorByQuat([0,1,0], camera.q);
@@ -114,7 +111,7 @@ function mouseMove(e) {
 function updateCamera(dt) {
   const acc    = accFactor;
   const maxSpd = turboEnabled ? 2048 : 512;
-  const decel  = BASE_DECEL * (turboEnabled ? 8 : 1);
+  const decel  = normBaseDecel * (turboEnabled ? 8 : 1);
 
   // dirección de movimiento local
   let move = [0,0,0];
@@ -197,8 +194,6 @@ function project3D(x,y,z) {
 }
 
 // === 7. Sistema de Estrellas (Chunks) ===
-const chunkSize = 4096, starsPerChunk = 256;
-let chunks = {};
 function chunkKey(cx,cy,cz){ return `${cx},${cy},${cz}`; }
 function generateChunk(cx,cy,cz){
   const key = chunkKey(cx,cy,cz), stars = [];
@@ -231,12 +226,6 @@ function updateChunks(){
   unloadDistantChunks(cx,cy,cz);
 }
 
-// === 8. Planetas Fijos ===
-const planets = [
-  { x:0, y:0, z:300, r:10, color:'#0cf', name:'Azulon' },
-  { x:100, y:20, z:600, r:20, color:'#f80', name:'Fulgor' }
-];
-
 
 // ====================================
 // === 9. Bucle Principal de Render ===
@@ -255,15 +244,16 @@ function loop(now) {
     const p = project3D(s.x, s.y, s.z);
     if (!p.visible) continue;
       const size = 2;
+      const starLargRendSize = size * 0.9;
       const bright = Math.min(1, p.scale * 2 + camera.speed * 0.02);
       ctx.fillStyle = `rgba(255,255,255,${bright})`;
       const dist = Math.hypot(s.x - camera.x, s.y - camera.y, s.z - camera.z);
     if (dist < (size*200)) {
       ctx.beginPath();
-      ctx.arc(p.x + (size/2) * p.scale, p.y + (size/2) * p.scale, (size/2) * p.scale, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.scale, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.fillRect(p.x, p.y, (size*0.9) * p.scale, (size*0.9) * p.scale);
+      ctx.fillRect(p.x - (starLargRendSize/2) * p.scale, p.y - (starLargRendSize/2) * p.scale, (starLargRendSize) * p.scale, (starLargRendSize) * p.scale);
     }
   }
 
@@ -283,157 +273,12 @@ function loop(now) {
     }
   }
 
+  
   // == HUDS ==
-
-  // HUD textos – Coordenadas arriba derecha (coloreadas)
-  ctx.save();
-  ctx.font = '14px monospace';
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = '#f55';
-  ctx.fillText(`${camera.x.toFixed(1)} :X `, canvas.width - 10, 10);
-  ctx.fillStyle = '#5f5';
-  ctx.fillText(`${camera.y.toFixed(1)} :Y `, canvas.width - 10, 30);
-  ctx.fillStyle = '#55f';
-  ctx.fillText(`${camera.z.toFixed(1)} :Z `, canvas.width - 10, 50);
-  ctx.restore();
-        
-  // HUD central inferior - Velocidad y Potencia
-  ctx.textAlign = 'center';
-
-  // Velocidad actual en grande
-  const speedFontSize = 96;
-  const speedY = canvas.height - 72;
-  const centerX = canvas.width / 2;
-  ctx.fillStyle = keys["ShiftLeft"] ? '#f55' : 'white';
-  ctx.font = `${speedFontSize}px monospace`;
-  ctx.fillText(camera.speed.toFixed(0), centerX, speedY);
-
-  // Si se está frenando: dibujar rectángulos fijos a los lados
-  if (keys["ShiftLeft"]) {
-    const rectH = speedFontSize *0.8;
-    const rectW = rectH / 2;
-    const rectY = speedY - speedFontSize * 0.7;
-    const radius = 8;
-
-    // Posiciones fijas respecto al centro
-    const offsetX = 192;
-    const leftX = centerX - offsetX - rectW;
-    const rightX = centerX + offsetX;
-
-    [leftX, rightX].forEach(x => {
-      ctx.beginPath();
-      ctx.moveTo(x + radius, rectY);
-      ctx.lineTo(x + rectW - radius, rectY);
-      ctx.quadraticCurveTo(x + rectW, rectY, x + rectW, rectY + radius);
-      ctx.lineTo(x + rectW, rectY + rectH - radius);
-      ctx.quadraticCurveTo(x + rectW, rectY + rectH, x + rectW - radius, rectY + rectH);
-      ctx.lineTo(x + radius, rectY + rectH);
-      ctx.quadraticCurveTo(x, rectY + rectH, x, rectY + rectH - radius);
-      ctx.lineTo(x, rectY + radius);
-      ctx.quadraticCurveTo(x, rectY, x + radius, rectY);
-      ctx.closePath();
-      ctx.fillStyle = '#f55';
-      ctx.fill();
-    });
-  }
-
-
-  // HUD central inferior – Barra de potencia segmentada sin fondo
-  const barWidthMax = 512;
-  const barHeight   = 32;
-  const gap         = 8;
-  const radius      = 4;
-  const x0 = (canvas.width - barWidthMax) / 2;
-  const y0 = canvas.height - 16 - barHeight;
-
-  const minAcc = turboEnabled ? TURBO_ACC_MIN : NORMAL_ACC_MIN;
-  const maxAcc = turboEnabled ? TURBO_ACC_MAX : NORMAL_ACC_MAX;
-  const step   = turboEnabled ? WHEEL_STEP * 8 : WHEEL_STEP;
-  const totalSegments  = Math.floor((maxAcc - minAcc) / step);
-  const currentSegment = Math.floor((accFactor - minAcc) / step);
-
-  const segW = (barWidthMax - gap * (totalSegments - 1)) / totalSegments;
-
-  // Color según modo
-  ctx.fillStyle = turboEnabled ? '#f90' : '#09f';
-
-  // Dibujar segmentos activos
-  for (let i = 0; i < currentSegment; i++) {
-    const xi = x0 + i * (segW + gap);
-    ctx.beginPath();
-    ctx.moveTo(xi + radius, y0);
-    ctx.lineTo(xi + segW - radius, y0);
-    ctx.quadraticCurveTo(xi + segW, y0, xi + segW, y0 + radius);
-    ctx.lineTo(xi + segW, y0 + barHeight - radius);
-    ctx.quadraticCurveTo(xi + segW, y0 + barHeight, xi + segW - radius, y0 + barHeight);
-    ctx.lineTo(xi + radius, y0 + barHeight);
-    ctx.quadraticCurveTo(xi, y0 + barHeight, xi, y0 + barHeight - radius);
-    ctx.lineTo(xi, y0 + radius);
-    ctx.quadraticCurveTo(xi, y0, xi + radius, y0);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Si está al mínimo: dibujar dos marcadores finos con esquinas redondeadas
-  if (currentSegment === 0) {
-    const markerW = barHeight / 4;
-    const markerH = barHeight;
-    const positions = [x0, x0 + barWidthMax - markerW];
-
-    for (const xi of positions) {
-      ctx.beginPath();
-      ctx.moveTo(xi + radius, y0);
-      ctx.lineTo(xi + markerW - radius, y0);
-      ctx.quadraticCurveTo(xi + markerW, y0, xi + markerW, y0 + radius);
-      ctx.lineTo(xi + markerW, y0 + markerH - radius);
-      ctx.quadraticCurveTo(xi + markerW, y0 + markerH, xi + markerW - radius, y0 + markerH);
-      ctx.lineTo(xi + radius, y0 + markerH);
-      ctx.quadraticCurveTo(xi, y0 + markerH, xi, y0 + markerH - radius);
-      ctx.lineTo(xi, y0 + radius);
-      ctx.quadraticCurveTo(xi, y0, xi + radius, y0);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  // ── Retículo central semitransparente con palitos integrados ──
-  const cx = canvas.width  / 2;
-  const cy = canvas.height / 2;
-  const radio = 24;                   // radio = n diámetro / 2
-  const segments = 3;                 // n partes
-  const gapo = 0.64;                   // espacio angular entre segmentos (radianes)
-  const lineWidth = 4.8;
-  const total = 2 * Math.PI;
-  const angleOffset = Math.PI / 2;    // empieza desde abajo
-  const radioToCenter = 12;
-
-  ctx.save();
-  ctx.lineWidth = lineWidth;
-  ctx.strokeStyle = 'rgba(127, 127, 127, 0.48)';
-  ctx.lineCap = 'round';
-
-  for (let i = 0; i < segments; i++) {
-    // ángulos de inicio y fin del segmento
-    const start    = angleOffset + i * (total / segments) + gapo / 2;
-    const end      = angleOffset + (i + 1) * (total / segments) - gapo / 2;
-    // ángulo medio para el palito
-    const midAngle = angleOffset + (i + 0.5) * (total / segments);
-
-    // coordenadas del palito
-    const xOuter = cx + Math.cos(midAngle) * radio;
-    const yOuter = cy + Math.sin(midAngle) * radio;
-    const xInner = cx + Math.cos(midAngle) * (radio - radioToCenter);
-    const yInner = cy + Math.sin(midAngle) * (radio - radioToCenter);
-
-    ctx.beginPath();
-    // arco del segmento
-    ctx.arc(cx, cy, radio, start, end);
-    // palito hacia el centro
-    ctx.moveTo(xOuter, yOuter);
-    ctx.lineTo(xInner, yInner);
-    ctx.stroke();
-  }
+  drawHudReticle(ctx);
+  drawHudCoords(ctx, camera);
+  drawHudSpeed(ctx, camera, keys, accFactor, turboEnabled);
+  //drawHudGyro(ctx, camera);
 
   // ── Giroscopio visual híbrido con símbolos separados uniformemente ──
   const gyroSize = 96;
@@ -619,7 +464,6 @@ function loop(now) {
 
 
   ctx.restore();
-
 
   requestAnimationFrame(loop);
 }
