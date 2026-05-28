@@ -1,59 +1,28 @@
-import { quatFromAxisAngle, quatMultiply, quatNormalize, rotateVectorByQuat } from './quaternion.js';
-import { normAccMin, chunkSize, starsPerChunk} from './variables.js';
-//import { drawPlanets } from './hud/objets.js';
+import { canvas, ctx } from './canvas.js';
+import { quatFromAxisAngle, quatMulti, quatNorma, rotetVectByQuat } from './quaternion.js';
+import { normAccMin, chunkSize, starsPerChunk, mouseWheelStep, normAccMax, turbAccMin, turbAccMax, normBaseDecel, inicAccFactor, inicTurboEnabled, inicX, inicY, inicZ, inicVX, inicVY, inicVZ, angle, axis, v} 
+from './constants.js';
+import { CelestBody } from './CelestBody.js';
 import { drawHudSpeed } from './hud/hudSpeed.js';
 import { drawHudCoords } from './hud/hudCoords.js';
 import { drawHudReticle } from './hud/hudReticle.js';
-//import { drawHudGyro } from './hud/hudGyro.js';
 
-//import { normAccMin, mouseWheelStep, normAccMax, turbAccMin, turbAccMax, normBaseDecel, chunkSize, starsPerChunk, camera, keys, turboEnabled, accFactor, chunks } from './variables.js';
-//import { setupInputs, setMouseMoveHandler} from './input.js';
-
-// === Space Camera System ===
-// Author: Tú
-// Descripción: Explorador 3D con cámara libre en canvas, rotaciones con cuaterniones y chunk dinámico de estrellas
-
-// === 1. Configuración de Constantes y Estado Global ===
-
-export const mouseWheelStep = normAccMin;
-export const normAccMax     = normAccMin * 8;
-export const turbAccMin    = normAccMin * 8;
-export const turbAccMax    = normAccMax * 8;   // 1024
-export const normBaseDecel  = normAccMax * 4;
-
-let camera = { x:0, y:0, z:0, q:[0,0,0,1], vx:0, vy:0, vz:0, speed:0 };
+//Algunas variables
+let camera = {
+  x:inicX, y:inicY, z:inicZ, q:[0,0,0,1], 
+  vx:inicVX, vy:inicVY, vz:inicVZ, speed:0 
+};
 let keys = {};
-let turboEnabled = false;
-let accFactor = 64;
+let turboEnabled = inicTurboEnabled;
+let accFactor = inicAccFactor;
 let chunks = {};
 
-// Planetas fijos en la escena
-const planets = [
-  { x:0,   y:0,  z:300, r:10, color:'#0cf', name:'Azulon' },
-  { x:100, y:20, z:600, r:20, color:'#f80', name:'Fulgor' }
-];
-
-// === 1. Setup del Canvas ===
-const canvas = document.getElementById("spaceCanvas");
-const ctx = canvas.getContext("2d");
-
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-
-window.addEventListener('resize', resize);
-resize();
-
 // === 2. Cuaterniones ===
-const axis = [0, 1, 0];
-const angle = Math.PI / 2;
-
+//1
 let q = quatFromAxisAngle(axis, angle);
-q = quatNormalize(q);
-
-const v = [1, 0, 0];
-const rotated = rotateVectorByQuat(v, q);
+q = quatNorma(q);
+//2
+const rotated = rotetVectByQuat(v, q);
 
 console.log(rotated);
 
@@ -100,11 +69,11 @@ document.addEventListener("pointerlockchange", () => {
 // control de Ratón (yaw, pitch)
 function mouseMove(e) {
   const sens = 0.002;
-  const up    = rotateVectorByQuat([0,1,0], camera.q);
-  const right = rotateVectorByQuat([1,0,0], camera.q);
+  const up    = rotetVectByQuat([0,1,0], camera.q);
+  const right = rotetVectByQuat([1,0,0], camera.q);
   const yawQ   = quatFromAxisAngle(up,    e.movementX * sens);
   const pitchQ = quatFromAxisAngle(right, e.movementY * sens);
-  camera.q = quatNormalize(quatMultiply(pitchQ, quatMultiply(yawQ, camera.q)));
+  camera.q = quatNorma(quatMulti(pitchQ, quatMulti(yawQ, camera.q)));
 }
 
 // === 5. Movimiento de la Cámara ===
@@ -125,7 +94,7 @@ function updateCamera(dt) {
   if (len>0) move = move.map(m=>m/len);
 
   // aceleración en coordenadas globales
-  const worldAcc = rotateVectorByQuat(move, camera.q).map(v=>v * acc * dt);
+  const worldAcc = rotetVectByQuat(move, camera.q).map(v=>v * acc * dt);
 
   // —–– Frenado mejorado: evita rebote —––
   if (keys["ShiftLeft"]) {
@@ -164,14 +133,14 @@ function updateCamera(dt) {
   }
 
   // roll (Q/E)
-  const forward = rotateVectorByQuat([0,0,-1], camera.q);
+  const forward = rotetVectByQuat([0,0,-1], camera.q);
   if (keys["KeyQ"]) {
     const rQ = quatFromAxisAngle(forward,  0.03);
-    camera.q = quatNormalize(quatMultiply(rQ, camera.q));
+    camera.q = quatNorma(quatMulti(rQ, camera.q));
   }
   if (keys["KeyE"]) {
     const rQ = quatFromAxisAngle(forward, -0.03);
-    camera.q = quatNormalize(quatMultiply(rQ, camera.q));
+    camera.q = quatNorma(quatMulti(rQ, camera.q));
   }
 
   // aplicamos posición
@@ -186,7 +155,8 @@ function updateCamera(dt) {
 function project3D(x,y,z) {
   let dx = x - camera.x, dy = y - camera.y, dz = z - camera.z;
   const invQ = [-camera.q[0],-camera.q[1],-camera.q[2],camera.q[3]];
-  [dx,dy,dz] = rotateVectorByQuat([dx,dy,dz], invQ);
+  [dx,dy,dz] = rotetVectByQuat([dx,dy,dz], invQ);
+  //VARIABLE/CONSTANT
   const fov = 500, scale = fov/(dz||0.0001);
   return { x: canvas.width/2 + dx*scale,
            y: canvas.height/2 - dy*scale,
@@ -243,9 +213,10 @@ function loop(now) {
   for (const key in chunks) for (const s of chunks[key]) {
     const p = project3D(s.x, s.y, s.z);
     if (!p.visible) continue;
+    //VARIABLE/CONSTANT
       const size = 2;
       const starLargRendSize = size * 0.9;
-      const bright = Math.min(1, p.scale * 2 + camera.speed * 0.02);
+      const bright = Math.min(1, p.scale * 2 + camera.speed * 0.002);
       ctx.fillStyle = `rgba(255,255,255,${bright})`;
       const dist = Math.hypot(s.x - camera.x, s.y - camera.y, s.z - camera.z);
     if (dist < (size*200)) {
@@ -257,19 +228,19 @@ function loop(now) {
     }
   }
 
-  // Dibujar planetas
-  for(const pl of planets){
-    const p = project3D(pl.x,pl.y,pl.z);
+  // Dibujar Cuerpos Celestiales
+  for(const cb of CelestBody){
+    const p = project3D(cb.x,cb.y,cb.z);
     if(!p.visible) continue;
     ctx.beginPath();
-    ctx.arc(p.x,p.y,pl.r*p.scale,0,Math.PI*2);
-    ctx.fillStyle = pl.color; ctx.fill();
-    const dist = Math.hypot(pl.x-camera.x, pl.y-camera.y, pl.z-camera.z);
-    if(dist < pl.r*2){
+    ctx.arc(p.x,p.y,cb.r*p.scale,0,Math.PI*2);
+    ctx.fillStyle = cb.color; ctx.fill();
+    const dist = Math.hypot(cb.x-camera.x, cb.y-camera.y, cb.z-camera.z);
+    if(dist < cb.r*2){
       ctx.fillStyle='white';
       ctx.font='20px sans-serif';
       ctx.textAlign='center';
-      ctx.fillText(pl.name, canvas.width/2, canvas.height*0.2);
+      ctx.fillText(cb.name, canvas.width/2, canvas.height*0.2);
     }
   }
 
@@ -281,6 +252,7 @@ function loop(now) {
   //drawHudGyro(ctx, camera);
 
   // ── Giroscopio visual híbrido con símbolos separados uniformemente ──
+  //VARIABLE/CONSTANT
   const gyroSize = 96;
   const gyroCX   = canvas.width / 2;
   const gyroCY   = 96;
@@ -298,9 +270,9 @@ function loop(now) {
 
   // cuaternión inverso y ejes del mundo
   const invQ = [-camera.q[0], -camera.q[1], -camera.q[2], camera.q[3]];
-  const xA   = rotateVectorByQuat([1, 0, 0], invQ);
-  const yA   = rotateVectorByQuat([0, 1, 0], invQ);
-  const zA   = rotateVectorByQuat([0, 0, 1], invQ);
+  const xA   = rotetVectByQuat([1, 0, 0], invQ);
+  const yA   = rotetVectByQuat([0, 1, 0], invQ);
+  const zA   = rotetVectByQuat([0, 0, 1], invQ);
 
   // mapea dz=>alpha
   function depthAlpha(dz) {
@@ -348,7 +320,7 @@ function loop(now) {
   const { arms, turns, starCount, innerRadius, expansion, starSpread, scale, starSize } = window._GALAXY;
   ctx.fillStyle = 'rgba(196, 196, 196, 0.04)';
   for (const [xw, zw] of window._galaxyStars) {
-    const [dx, dy] = rotateVectorByQuat([xw, 0, zw], invQ);
+    const [dx, dy] = rotetVectByQuat([xw, 0, zw], invQ);
     const px       = dx * axisLen * scale;
     const py       = -dy * axisLen * scale;
     ctx.beginPath();
@@ -449,9 +421,9 @@ function loop(now) {
 
   // Ejes rotados con sus colores
   const axes = [
-    { vec: rotateVectorByQuat([1, 0, 0], invQ), color: '#f55' }, // X
-    { vec: rotateVectorByQuat([0, 1, 0], invQ), color: '#5f5' }, // Y
-    { vec: rotateVectorByQuat([0, 0, 1], invQ), color: '#55f' }  // Z
+    { vec: rotetVectByQuat([1, 0, 0], invQ), color: '#f55' }, // X
+    { vec: rotetVectByQuat([0, 1, 0], invQ), color: '#5f5' }, // Y
+    { vec: rotetVectByQuat([0, 0, 1], invQ), color: '#55f' }  // Z
   ];
 
   // Ordenar de menor a mayor profundidad (más al fondo primero)

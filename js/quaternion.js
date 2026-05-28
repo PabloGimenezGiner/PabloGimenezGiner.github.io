@@ -3,8 +3,8 @@ export function quatFromAxisAngle(axis, angle) {
   const s = Math.sin(half);
   return [axis[0] * s, axis[1] * s, axis[2] * s, Math.cos(half)];
 }
-
-export function quatMultiply(a, b) {
+//Multiply
+export function quatMulti(a, b) {
   const [ax, ay, az, aw] = a;
   const [bx, by, bz, bw] = b;
   return [
@@ -14,14 +14,14 @@ export function quatMultiply(a, b) {
     aw*bw - ax*bx - ay*by - az*bz
   ];
 }
-
-export function quatNormalize(q) {
+//Normalize
+export function quatNorma(q) {
   const [x,y,z,w] = q;
   const len = Math.hypot(x,y,z,w) || 1;
   return [x/len, y/len, z/len, w/len];
 }
-
-export function rotateVectorByQuat(v, q) {
+//RotateVector
+export function rotetVectByQuat(v, q) {
   const [qx,qy,qz,qw] = q;
   const [vx,vy,vz] = v;
   const tx = 2*(qy*vz - qz*vy);
