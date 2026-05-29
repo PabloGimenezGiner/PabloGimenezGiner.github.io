@@ -3,7 +3,7 @@ import { rotateVectorByQuat } from '../quaternion.js';
 export function drawHudGyro(ctx, camera) {
     // ── Giroscopio visual híbrido con símbolos separados uniformemente ──
   const gyroSize = 96;
-  const gyroCX   = canvas.width / 2;
+  const gyroCX   = ctx.canvas.width / 2;
   const gyroCY   = 96;
   const axisLen  = gyroSize / 2;
   const gapFrac  = 0.64;
