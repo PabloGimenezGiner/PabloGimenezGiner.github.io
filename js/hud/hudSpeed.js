@@ -1,3 +1,5 @@
+import { normAccMin, normAccMax, turbAccMin, turbAccMax, mouseWheelStep } from '../constants.js';
+
 export function drawHudSpeed(ctx, camera, keys, accFactor, turboEnabled) {
 
   // ——— HUD central inferior – Velocidad y Potencia ———
@@ -44,11 +46,12 @@ export function drawHudSpeed(ctx, camera, keys, accFactor, turboEnabled) {
   const x0 = (ctx.canvas.width - barWidthMax) / 2;
   const y0 = ctx.canvas.height - 16 - barHeight;
 
-  const NORMAL_ACC_MIN = 8;
-  const NORMAL_ACC_MAX = NORMAL_ACC_MIN * 8;
-  const TURBO_ACC_MIN  = NORMAL_ACC_MIN * 8;
-  const TURBO_ACC_MAX  = NORMAL_ACC_MAX * 8;
-  const WHEEL_STEP     = NORMAL_ACC_MIN;
+  // Usar constantes importadas
+  const NORMAL_ACC_MIN = normAccMin;
+  const NORMAL_ACC_MAX = normAccMax;
+  const TURBO_ACC_MIN  = turbAccMin;
+  const TURBO_ACC_MAX  = turbAccMax;
+  const WHEEL_STEP     = mouseWheelStep;
 
   const minAcc = turboEnabled ? TURBO_ACC_MIN : NORMAL_ACC_MIN;
   const maxAcc = turboEnabled ? TURBO_ACC_MAX : NORMAL_ACC_MAX;
