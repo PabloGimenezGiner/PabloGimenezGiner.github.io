@@ -31,7 +31,8 @@ function seededRandom(seed) {
 }
 // =================================================
 
-window.showInfoHud = true;
+// --- Control del HUD de información y modo debug colores (F4) ---
+window.showInfoHud = false;   // DESACTIVADO POR DEFECTO
 document.addEventListener("keydown", (e) => {
   if (e.code === "F4") {
     e.preventDefault();
@@ -261,7 +262,6 @@ function loop(now) {
       const dz = s.z - camera.z;
       const dist = Math.hypot(dx, dy, dz);
 
-      // Fade solo para estrellas lejanas (>= LOD_MID_DIST)
       let distanceFade = 1;
       if (dist >= LOD_MID_DIST) {
         const t = Math.min(1, dist / maxFadeDist);
@@ -291,7 +291,6 @@ function loop(now) {
 
       let brightness = baseBrightness * distanceFade * directionalFactor;
 
-      // Boost por rango de distancia (cercanas y medias con mismo factor)
       if (dist < LOD_NEAR_DIST) {
         brightness *= nearStarBrightnessBoost;
       } else if (dist < LOD_MID_DIST) {
