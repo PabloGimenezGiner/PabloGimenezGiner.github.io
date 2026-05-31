@@ -32,13 +32,24 @@ function seededRandom(seed) {
 // =================================================
 
 // --- Control del HUD de información y modo debug colores (F4) ---
-window.showInfoHud = false;   // DESACTIVADO POR DEFECTO
+window.showInfoHud = false;
 document.addEventListener("keydown", (e) => {
   if (e.code === "F4") {
     e.preventDefault();
     window.showInfoHud = !window.showInfoHud;
   }
 });
+
+// ========== FRUSTUM CULLING (F2) ==========
+let frustumCullingEnabled = true;  // Activado por defecto
+document.addEventListener("keydown", (e) => {
+  if (e.code === "F2") {
+    e.preventDefault();
+    frustumCullingEnabled = !frustumCullingEnabled;
+    console.log("Frustum culling:", frustumCullingEnabled ? "ON" : "OFF");
+  }
+});
+// ==========================================
 
 let frameCount = 0;
 let lastFpsUpdate = performance.now();
@@ -271,6 +282,18 @@ function loop(now) {
 
       const [rx, ry, rz] = rotateVectorByQuat([dx, dy, dz], invQ);
       if (rz <= 1) continue;
+
+      // ========== FRUSTUM CULLING (F2) ==========
+      if (frustumCullingEnabled) {
+        const halfW = ctx.canvas.width / 2;
+        const halfH = ctx.canvas.height / 2;
+        const limitX = halfW * rz / FOV;
+        const limitY = halfH * rz / FOV;
+        if (Math.abs(rx) > limitX || Math.abs(ry) > limitY) {
+          continue; // Fuera del campo de visión
+        }
+      }
+      // =========================================
 
       const scale = FOV / rz;
       const px = ctx.canvas.width / 2 + rx * scale;
