@@ -8,7 +8,8 @@ import {
   LOD_NEAR_DIST, LOD_MID_DIST,
   directionalSpeedFactor, directionalMinBright, directionalMaxBright,
   farStarBrightnessBoost,
-  FOV
+  FOV,
+  STAR_SIZE_NEAR, STAR_SIZE_MID, STAR_SIZE_FAR, STAR_SIZE_FAR_MIN  // nuevas constantes
 } from './constants.js';
 import { CelestBody } from './CelestBody.js';
 import { drawHudSpeed } from './hud/hudSpeed.js';
@@ -52,8 +53,10 @@ document.addEventListener("keyup",   e => { keys[e.code] = false; });
 
 ctx.canvas.addEventListener("click", () => ctx.canvas.requestPointerLock());
 
+// Botón central del ratón para turbo
 ctx.canvas.addEventListener("mousedown", e => {
   if (e.button === 1) {
+    e.preventDefault();  // Evita el comportamiento por defecto (scroll automático)
     settings.turboEnabled = !settings.turboEnabled;
     if (settings.turboEnabled) {
       settings.accFactor = Math.min(turbAccMax, settings.accFactor * 8);
@@ -327,18 +330,18 @@ function loop(now) {
         fillColor = `rgba(255, 255, 255, ${brightness})`;
       }
 
-      // Dibujar según LOD
+      // ========== DIBUJADO CON LAS NUEVAS CONSTANTES DE TAMAÑO ==========
       if (dist < LOD_NEAR_DIST) {
         ctx.beginPath();
-        ctx.arc(px, py, scale * 2, 0, Math.PI * 2);
+        ctx.arc(px, py, scale * STAR_SIZE_NEAR, 0, Math.PI * 2);
         ctx.fillStyle = fillColor;
         ctx.fill();
       } else if (dist < LOD_MID_DIST) {
-        const size = scale * 1.2;
+        const size = scale * STAR_SIZE_MID;
         ctx.fillStyle = fillColor;
         ctx.fillRect(px - size/2, py - size/2, size, size);
       } else {
-        const size = Math.max(2, scale * 0.8);
+        const size = Math.max(STAR_SIZE_FAR_MIN, scale * STAR_SIZE_FAR);
         ctx.fillStyle = fillColor;
         ctx.fillRect(px - size/2, py - size/2, size, size);
       }
