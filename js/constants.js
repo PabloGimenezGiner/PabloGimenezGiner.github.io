@@ -40,11 +40,15 @@ export const v = [1, 0, 0];
 export const LOD_NEAR_DIST = 3072;
 export const LOD_MID_DIST  = 4096;
 
+// Boost de brillo para estrellas cercanas (dist < LOD_NEAR_DIST)
+export const nearStarBrightnessBoost = 1.8;
+// Boost de brillo para estrellas de distancia media (entre LOD_NEAR_DIST y LOD_MID_DIST)
+export const midStarBrightnessBoost = 1.8;
 // Multiplicador de brillo extra para estrellas lejanas (≥ LOD_MID_DIST)
 export const farStarBrightnessBoost = 2;
 
 // Factor de brillo direccional por velocidad
-export const directionalSpeedFactor = 0.16;
+export const directionalSpeedFactor = 0.1;
 export const directionalMinBright = 0;
 export const directionalMaxBright = 8;
 
