@@ -7,9 +7,9 @@ import {
   inicVX, inicVY, inicVZ, renderDistanceChunks,
   LOD_NEAR_DIST, LOD_MID_DIST,
   directionalSpeedFactor, directionalMinBright, directionalMaxBright,
-  farStarBrightnessBoost,
+  farStarBrightnessBoost, midStarBrightnessBoost, nearStarBrightnessBoost,
   FOV,
-  STAR_SIZE_NEAR, STAR_SIZE_MID, STAR_SIZE_FAR, STAR_SIZE_FAR_MIN  // nuevas constantes
+  STAR_SIZE_NEAR, STAR_SIZE_MID, STAR_SIZE_FAR, STAR_SIZE_FAR_MIN
 } from './constants.js';
 import { CelestBody } from './CelestBody.js';
 import { drawHudSpeed } from './hud/hudSpeed.js';
@@ -20,12 +20,10 @@ import { drawHudInfo } from './hud/hudInfo.js';
 import { camera, keys, settings, chunks, mouseButtons } from './variable.js';
 
 // ========== SEMILLA GLOBAL DETERMINISTA ==========
-// Se genera una semilla aleatoria al inicio (se puede cambiar si se desea)
-export let globalSeed = Math.floor(Math.random() * 1000000);  // Número entero entre 0 y 999999
+export let globalSeed = Math.floor(Math.random() * 1000000);
 
-// Generador pseudoaleatorio determinista (algoritmo de congruencia lineal)
 function seededRandom(seed) {
-  let s = seed >>> 0;  // asegurar entero de 32 bits sin signo
+  let s = seed >>> 0;
   return function() {
     s = (s * 1103515245 + 12345) & 0x7fffffff;
     return s / 0x7fffffff;
@@ -33,7 +31,6 @@ function seededRandom(seed) {
 }
 // =================================================
 
-// --- Control del HUD de información y modo debug colores (F4) ---
 window.showInfoHud = true;
 document.addEventListener("keydown", (e) => {
   if (e.code === "F4") {
@@ -42,21 +39,18 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// --- FPS ---
 let frameCount = 0;
 let lastFpsUpdate = performance.now();
 let currentFps = 60;
 
-// === Entradas ===
 document.addEventListener("keydown", e => { keys[e.code] = true; });
 document.addEventListener("keyup",   e => { keys[e.code] = false; });
 
 ctx.canvas.addEventListener("click", () => ctx.canvas.requestPointerLock());
 
-// Botón central del ratón para turbo
 ctx.canvas.addEventListener("mousedown", e => {
   if (e.button === 1) {
-    e.preventDefault();  // Evita el comportamiento por defecto (scroll automático)
+    e.preventDefault();
     settings.turboEnabled = !settings.turboEnabled;
     if (settings.turboEnabled) {
       settings.accFactor = Math.min(turbAccMax, settings.accFactor * 8);
@@ -76,8 +70,7 @@ ctx.canvas.addEventListener("wheel", e => {
   settings.accFactor = Math.max(min, Math.min(max, settings.accFactor));
 }, { passive: false });
 
-// Ratón: botón izquierdo (atrás) y derecho (adelante)
-ctx.canvas.addEventListener("contextmenu", (e) => e.preventDefault()); // Evitar menú contextual
+ctx.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
 ctx.canvas.addEventListener("mousedown", (e) => {
   if (e.button === 0) mouseButtons.left = true;
@@ -89,7 +82,6 @@ ctx.canvas.addEventListener("mouseup", (e) => {
   if (e.button === 2) mouseButtons.right = false;
 });
 
-// También cuando el puntero sale del canvas mientras se mantiene pulsado
 window.addEventListener("mouseup", (e) => {
   if (e.button === 0) mouseButtons.left = false;
   if (e.button === 2) mouseButtons.right = false;
@@ -111,7 +103,6 @@ function mouseMove(e) {
   camera.q = quatNormalize(quatMultiply(pitchQ, quatMultiply(yawQ, camera.q)));
 }
 
-// === Movimiento de cámara ===
 function updateCamera(dt) {
   const acc    = settings.accFactor;
   const maxSpd = settings.turboEnabled ? 2048 : 512;
@@ -125,9 +116,8 @@ function updateCamera(dt) {
   if (keys["KeyR"]) move[1] += 1;
   if (keys["KeyF"]) move[1] -= 1;
 
-  // Movimiento con botones del ratón
-  if (mouseButtons.right) move[2] += 1;  // adelante
-  if (mouseButtons.left)  move[2] -= 1;  // atrás
+  if (mouseButtons.right) move[2] += 1;
+  if (mouseButtons.left)  move[2] -= 1;
 
   const len = Math.hypot(...move);
   if (len > 0) move = move.map(m => m / len);
@@ -176,7 +166,6 @@ function updateCamera(dt) {
   camera.speed = Math.hypot(camera.vx, camera.vy, camera.vz);
 }
 
-// === Proyección 3D → 2D (solo para cuerpos celestes) ===
 function project3D(x,y,z) {
   let dx = x - camera.x, dy = y - camera.y, dz = z - camera.z;
   const invQ = [-camera.q[0],-camera.q[1],-camera.q[2],camera.q[3]];
@@ -190,14 +179,12 @@ function project3D(x,y,z) {
   };
 }
 
-// === Sistema de chunks (esférico) con generación determinista ===
 function chunkKey(cx,cy,cz) { return `${cx},${cy},${cz}`; }
 
 function generateChunk(cx,cy,cz) {
   const stars = [];
-  // Semilla única para cada chunk: combina la semilla global con las coordenadas
   let chunkSeed = (globalSeed * 31 + cx) * 31 + cy;
-  chunkSeed = (chunkSeed * 31 + cz) & 0x7fffffff;  // asegurar entero positivo de 31 bits
+  chunkSeed = (chunkSeed * 31 + cz) & 0x7fffffff;
   const rng = seededRandom(chunkSeed);
   for (let i = 0; i < starsPerChunk; i++) {
     stars.push({
@@ -238,7 +225,6 @@ function updateChunks() {
   unloadDistantChunks(cx, cy, cz);
 }
 
-// === Bucle principal optimizado con fade corregido ===
 let last = performance.now();
 
 function loop(now) {
@@ -247,7 +233,6 @@ function loop(now) {
   updateCamera(dt);
   updateChunks();
 
-  // Actualizar FPS
   frameCount++;
   const nowSec = performance.now();
   if (nowSec - lastFpsUpdate >= 1000) {
@@ -259,46 +244,40 @@ function loop(now) {
   ctx.fillStyle = 'black';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  // --- Fade corregido: radio exacto y curva cuadrática ---
-  const maxFadeDist = renderDistanceChunks * chunkSize; // sin factor extra
+  const maxFadeDist = renderDistanceChunks * chunkSize;
   let renderedStars = 0;
   let chunkCount = 0;
 
-  // Vector velocidad de la cámara (para efecto direccional)
   const velX = camera.vx, velY = camera.vy, velZ = camera.vz;
   const speedTotal = Math.hypot(velX, velY, velZ);
-
-  // Cuaternión inverso de la cámara (una sola vez por frame)
   const invQ = [-camera.q[0], -camera.q[1], -camera.q[2], camera.q[3]];
 
   for (const key in chunks) {
     chunkCount++;
     const stars = chunks[key];
     for (const s of stars) {
-      // Diferencia y distancia (una sola vez)
       const dx = s.x - camera.x;
       const dy = s.y - camera.y;
       const dz = s.z - camera.z;
       const dist = Math.hypot(dx, dy, dz);
 
-      // Nuevo cálculo de fade con curva suave
-      const t = Math.min(1, dist / maxFadeDist);
-      let distanceFade = 1 - t * t;
-      if (distanceFade <= 0) continue;
+      // Fade solo para estrellas lejanas (>= LOD_MID_DIST)
+      let distanceFade = 1;
+      if (dist >= LOD_MID_DIST) {
+        const t = Math.min(1, dist / maxFadeDist);
+        distanceFade = 1 - t * t;
+        if (distanceFade <= 0) continue;
+      }
 
-      // Rotar a coordenadas de cámara
       const [rx, ry, rz] = rotateVectorByQuat([dx, dy, dz], invQ);
-      if (rz <= 1) continue; // detrás o muy cerca
+      if (rz <= 1) continue;
 
-      // Proyección
       const scale = FOV / rz;
       const px = ctx.canvas.width / 2 + rx * scale;
       const py = ctx.canvas.height / 2 - ry * scale;
 
-      // Brillo base por tamaño proyectado
       let baseBrightness = Math.min(1, scale * 2.0 + 0.15);
 
-      // Efecto direccional por velocidad (Doppler visual)
       let directionalFactor = 1.0;
       if (speedTotal > 0.01) {
         const invDist = 1 / dist;
@@ -312,7 +291,12 @@ function loop(now) {
 
       let brightness = baseBrightness * distanceFade * directionalFactor;
 
-      // Boost extra para estrellas lejanas
+      // Boost por rango de distancia (cercanas y medias con mismo factor)
+      if (dist < LOD_NEAR_DIST) {
+        brightness *= nearStarBrightnessBoost;
+      } else if (dist < LOD_MID_DIST) {
+        brightness *= midStarBrightnessBoost;
+      }
       if (dist >= LOD_MID_DIST) {
         brightness *= farStarBrightnessBoost;
       }
@@ -320,7 +304,6 @@ function loop(now) {
       brightness = Math.min(1, Math.max(0, brightness));
       if (brightness <= 0.02) continue;
 
-      // Selección de color según modo debug
       let fillColor;
       if (window.showInfoHud) {
         if (dist < LOD_NEAR_DIST) fillColor = `rgba(255, 255, 0, ${brightness})`;
@@ -330,7 +313,6 @@ function loop(now) {
         fillColor = `rgba(255, 255, 255, ${brightness})`;
       }
 
-      // ========== DIBUJADO CON LAS NUEVAS CONSTANTES DE TAMAÑO ==========
       if (dist < LOD_NEAR_DIST) {
         ctx.beginPath();
         ctx.arc(px, py, scale * STAR_SIZE_NEAR, 0, Math.PI * 2);
@@ -350,7 +332,6 @@ function loop(now) {
     }
   }
 
-  // Cuerpos celestes (usando project3D)
   for (const cb of CelestBody) {
     const p = project3D(cb.x, cb.y, cb.z);
     if (!p.visible) continue;
@@ -367,7 +348,6 @@ function loop(now) {
     }
   }
 
-  // HUDS
   drawHudReticle(ctx);
   drawHudCoords(ctx, camera);
   drawHudSpeed(ctx, camera, keys, settings.accFactor, settings.turboEnabled);
@@ -380,7 +360,6 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-// === Inicialización de chunks ===
 const startX = Math.floor(camera.x / chunkSize);
 const startY = Math.floor(camera.y / chunkSize);
 const startZ = Math.floor(camera.z / chunkSize);
