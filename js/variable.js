@@ -14,3 +14,9 @@ export const settings = {
 };
 
 export let chunks = {};
+
+// ✅ Estado de botones del ratón
+export let mouseButtons = {
+  left: false,
+  right: false
+};
