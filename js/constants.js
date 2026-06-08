@@ -1,6 +1,4 @@
 // Initial Parameters
-// Escala inicial//
-export const inicScalFactr = 2;
 // Posicion inicial
 export const inicX = 0;
 export const inicY = 0;
@@ -31,7 +29,7 @@ export const renderDistanceChunks = 8;
 export const chunkSize = 8192;
 export const starsPerChunk = 2;
 
-// Constantes de los Cuaterniones
+// Constantes de los Cuaterniones (no usadas actualmente, se pueden eliminar si se desea)
 export const axis = [0, 1, 0];
 export const angle = Math.PI / 2;
 export const v = [1, 0, 0];
