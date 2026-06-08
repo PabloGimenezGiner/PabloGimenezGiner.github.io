@@ -19,9 +19,6 @@ export function drawHudGyro(ctx, camera) {
 
   // cuaternión inverso y ejes del mundo
   const invQ = [-camera.q[0], -camera.q[1], -camera.q[2], camera.q[3]];
-  const xA   = rotateVectorByQuat([1, 0, 0], invQ);
-  const yA   = rotateVectorByQuat([0, 1, 0], invQ);
-  const zA   = rotateVectorByQuat([0, 0, 1], invQ);
 
   // mapea dz=>alpha
   function depthAlpha(dz) {

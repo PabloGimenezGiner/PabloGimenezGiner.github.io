@@ -139,6 +139,7 @@ function updateCamera(dt) {
   if (keys["ShiftLeft"]) {
     const sv = [camera.vx, camera.vy, camera.vz];
     const sp = Math.hypot(...sv);
+    // Evitar división por cero si la velocidad es cero
     if (sp > 0) {
       const dv = sv.map(v => -v/sp * decel * dt);
       const newV = [camera.vx + dv[0], camera.vy + dv[1], camera.vz + dv[2]];
