@@ -1,20 +1,20 @@
+// hud/hudSpeed.js
 import { normAccMin, normAccMax, turbAccMin, turbAccMax, mouseWheelStep } from '../constants.js';
 
-export function drawHudSpeed(ctx, camera, keys, accFactor, turboEnabled) {
-
+export function drawHudSpeed(ctx, camera, isBraking, accFactor, turboEnabled) {
   // ——— HUD central inferior – Velocidad y Potencia ———
   const centerX = ctx.canvas.width / 2;
   const speedFontSize = 96;
   const speedY = ctx.canvas.height - 72;
 
   // Velocidad
-  ctx.fillStyle = keys["ShiftLeft"] ? '#f55' : 'white';
+  ctx.fillStyle = isBraking ? '#f55' : 'white';
   ctx.font = `${speedFontSize}px monospace`;
   ctx.textAlign = 'center';
   ctx.fillText(camera.speed.toFixed(0), centerX, speedY);
 
   // Frenado (rectángulos laterales)
-  if (keys["ShiftLeft"]) {
+  if (isBraking) {
     const rectH = speedFontSize * 0.8;
     const rectW = rectH / 2;
     const rectY = speedY - speedFontSize * 0.7;
@@ -46,16 +46,9 @@ export function drawHudSpeed(ctx, camera, keys, accFactor, turboEnabled) {
   const x0 = (ctx.canvas.width - barWidthMax) / 2;
   const y0 = ctx.canvas.height - 16 - barHeight;
 
-  // Usar constantes importadas
-  const NORMAL_ACC_MIN = normAccMin;
-  const NORMAL_ACC_MAX = normAccMax;
-  const TURBO_ACC_MIN  = turbAccMin;
-  const TURBO_ACC_MAX  = turbAccMax;
-  const WHEEL_STEP     = mouseWheelStep;
-
-  const minAcc = turboEnabled ? TURBO_ACC_MIN : NORMAL_ACC_MIN;
-  const maxAcc = turboEnabled ? TURBO_ACC_MAX : NORMAL_ACC_MAX;
-  const step   = turboEnabled ? WHEEL_STEP * 8 : WHEEL_STEP;
+  const minAcc = turboEnabled ? turbAccMin : normAccMin;
+  const maxAcc = turboEnabled ? turbAccMax : normAccMax;
+  const step   = turboEnabled ? mouseWheelStep * 8 : mouseWheelStep;
   const totalSegments  = Math.floor((maxAcc - minAcc) / step);
   const currentSegment = Math.floor((accFactor - minAcc) / step);
   const segW = (barWidthMax - gap * (totalSegments - 1)) / totalSegments;
@@ -76,6 +69,7 @@ export function drawHudSpeed(ctx, camera, keys, accFactor, turboEnabled) {
     ctx.closePath();
     ctx.fill();
   }
+
   // Marcadores de mínimo
   if (currentSegment === 0) {
     const markerW = barHeight / 4;

@@ -17,7 +17,8 @@ import { drawHudCoords } from './hud/hudCoords.js';
 import { drawHudReticle } from './hud/hudReticle.js';
 import { drawHudGyro } from './hud/hudGyro.js';
 import { drawHudInfo } from './hud/hudInfo.js';
-import { camera, keys, settings, chunks, mouseButtons } from './variable.js';
+import { camera, settings, chunks } from './variable.js';
+import InputManager from './input/inputManager.js';
 
 // ========== SEMILLA GLOBAL DETERMINISTA ==========
 export let globalSeed = Math.floor(Math.random() * 1000000);
@@ -31,117 +32,142 @@ function seededRandom(seed) {
 }
 // =================================================
 
-// --- Control del HUD de información y modo debug colores (F4) ---
+// --- Control del HUD de información (F4) ---
 window.showInfoHud = false;
-document.addEventListener("keydown", (e) => {
-  if (e.code === "F4") {
-    e.preventDefault();
-    window.showInfoHud = !window.showInfoHud;
-  }
-});
 
 // ========== FRUSTUM CULLING (F2) ==========
-let frustumCullingEnabled = true;  // Activado por defecto
-document.addEventListener("keydown", (e) => {
-  if (e.code === "F2") {
-    e.preventDefault();
-    frustumCullingEnabled = !frustumCullingEnabled;
-    console.log("Frustum culling:", frustumCullingEnabled ? "ON" : "OFF");
-  }
-});
-// ==========================================
+let frustumCullingEnabled = true;
 
+// ========== INPUT MANAGER ==========
+const inputManager = new InputManager(ctx.canvas);
+
+// ========== ESTADÍSTICAS FPS ==========
 let frameCount = 0;
 let lastFpsUpdate = performance.now();
 let currentFps = 60;
 
-document.addEventListener("keydown", e => { keys[e.code] = true; });
-document.addEventListener("keyup",   e => { keys[e.code] = false; });
+// ========== PARÁMETROS DE FÍSICA DE ROTACIÓN ==========
+let angularVel = { yaw: 0, pitch: 0, roll: 0 };
+const ROT_ACC = 4.0;
+const ROT_DAMP = 0.96;
+const ROT_BRAKE_FORCE = 8.0;
+const MAX_ANGULAR_SPEED = 6.0;
 
-ctx.canvas.addEventListener("click", () => ctx.canvas.requestPointerLock());
+// ========== MODOS DE CONDUCCIÓN ==========
+let movementAutoBrake = false;      // frenado automático al soltar teclas (R) (Desactivado intencionalmente)
+let rotationAutoDamp = true;       // damping automático al soltar giros (U)
 
-ctx.canvas.addEventListener("mousedown", e => {
-  if (e.button === 1) {
-    e.preventDefault();
-    settings.turboEnabled = !settings.turboEnabled;
-    if (settings.turboEnabled) {
-      settings.accFactor = Math.min(turbAccMax, settings.accFactor * 8);
-    } else {
-      settings.accFactor = Math.max(normAccMin, settings.accFactor / 8);
+// ========== FUNCIONES DE CÁMARA ==========
+function updateCamera(dt) {
+  const acc = settings.accFactor;
+  const maxSpd = settings.turboEnabled ? 2048 : 512;
+  const decel = normBaseDecel * (settings.turboEnabled ? 8 : 1);
+
+  // ---- 1. Rotación desde el ratón (yaw/pitch) ----
+  const rot = inputManager.getRotationDelta();
+  if (rot.yaw !== 0 || rot.pitch !== 0) {
+    const up = rotateVectorByQuat([0, 1, 0], camera.q);
+    const right = rotateVectorByQuat([1, 0, 0], camera.q);
+    const yawQ = quatFromAxisAngle(up, rot.yaw);
+    const pitchQ = quatFromAxisAngle(right, rot.pitch);
+    camera.q = quatNormalize(quatMultiply(pitchQ, quatMultiply(yawQ, camera.q)));
+  }
+
+  // ---- 2. Rotaciones desde el teclado CON INERCIA Y ACELERACIÓN ----
+  const yawInput = inputManager.getYawDirection();
+  const pitchInput = inputManager.getPitchDirection();
+  const rollInput = inputManager.getRollDirection();
+  const rotBraking = inputManager.isRotBraking();
+
+  // Aceleración / frenado rotacional
+  if (!rotBraking) {
+    angularVel.yaw += yawInput * ROT_ACC * dt;
+    angularVel.pitch += pitchInput * ROT_ACC * dt;
+    angularVel.roll += rollInput * ROT_ACC * dt;
+  } else {
+    const brake = ROT_BRAKE_FORCE * dt;
+    if (angularVel.yaw > 0) angularVel.yaw = Math.max(0, angularVel.yaw - brake);
+    else if (angularVel.yaw < 0) angularVel.yaw = Math.min(0, angularVel.yaw + brake);
+    if (angularVel.pitch > 0) angularVel.pitch = Math.max(0, angularVel.pitch - brake);
+    else if (angularVel.pitch < 0) angularVel.pitch = Math.min(0, angularVel.pitch + brake);
+    if (angularVel.roll > 0) angularVel.roll = Math.max(0, angularVel.roll - brake);
+    else if (angularVel.roll < 0) angularVel.roll = Math.min(0, angularVel.roll + brake);
+  }
+
+  // Damping automático (solo si activado y no se está frenando)
+  if (!rotBraking) {
+    if (rotationAutoDamp) {
+      if (yawInput === 0) angularVel.yaw *= ROT_DAMP;
+      if (pitchInput === 0) angularVel.pitch *= ROT_DAMP;
+      if (rollInput === 0) angularVel.roll *= ROT_DAMP;
     }
   }
-});
 
-ctx.canvas.addEventListener("wheel", e => {
-  e.preventDefault();
-  const delta = -Math.sign(e.deltaY);
-  const step = settings.turboEnabled ? mouseWheelStep * 8 : mouseWheelStep;
-  settings.accFactor += delta * step;
-  const min = settings.turboEnabled ? turbAccMin : normAccMin;
-  const max = settings.turboEnabled ? turbAccMax : normAccMax;
-  settings.accFactor = Math.max(min, Math.min(max, settings.accFactor));
-}, { passive: false });
+  // Limitar velocidades máximas
+  angularVel.yaw = Math.min(MAX_ANGULAR_SPEED, Math.max(-MAX_ANGULAR_SPEED, angularVel.yaw));
+  angularVel.pitch = Math.min(MAX_ANGULAR_SPEED, Math.max(-MAX_ANGULAR_SPEED, angularVel.pitch));
+  angularVel.roll = Math.min(MAX_ANGULAR_SPEED, Math.max(-MAX_ANGULAR_SPEED, angularVel.roll));
 
-ctx.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  // Aplicar rotaciones
+  if (angularVel.yaw !== 0) {
+    const yawAngle = angularVel.yaw * dt;
+    const up = rotateVectorByQuat([0, 1, 0], camera.q);
+    const yawQ = quatFromAxisAngle(up, yawAngle);
+    camera.q = quatNormalize(quatMultiply(yawQ, camera.q));
+  }
+  if (angularVel.pitch !== 0) {
+    const pitchAngle = angularVel.pitch * dt;
+    const right = rotateVectorByQuat([1, 0, 0], camera.q);
+    const pitchQ = quatFromAxisAngle(right, pitchAngle);
+    camera.q = quatNormalize(quatMultiply(pitchQ, camera.q));
+  }
+  if (angularVel.roll !== 0) {
+    const rollAngle = angularVel.roll * dt;
+    const forward = rotateVectorByQuat([0, 0, -1], camera.q);
+    const rollQ = quatFromAxisAngle(forward, rollAngle);
+    camera.q = quatNormalize(quatMultiply(rollQ, camera.q));
+  }
 
-ctx.canvas.addEventListener("mousedown", (e) => {
-  if (e.button === 0) mouseButtons.left = true;
-  if (e.button === 2) mouseButtons.right = true;
-});
+  // ---- 3. Movimiento (aceleración) ----
+  const move = inputManager.getMoveDirection();
+  if (move.x !== 0 || move.y !== 0 || move.z !== 0) {
+    const worldAcc = rotateVectorByQuat([move.x, move.y, move.z], camera.q).map(v => v * acc * dt);
+    camera.vx += worldAcc[0];
+    camera.vy += worldAcc[1];
+    camera.vz += worldAcc[2];
+  }
 
-ctx.canvas.addEventListener("mouseup", (e) => {
-  if (e.button === 0) mouseButtons.left = false;
-  if (e.button === 2) mouseButtons.right = false;
-});
+  // Frenado automático (si activado, sin input y sin frenado manual)
+  if (movementAutoBrake && move.x === 0 && move.y === 0 && move.z === 0 && !inputManager.isBraking()) {
+    const autoDecel = normBaseDecel * (settings.turboEnabled ? 8 : 1);
+    const sp = Math.hypot(camera.vx, camera.vy, camera.vz);
+    if (sp > 0) {
+      const decelMag = autoDecel * dt;
+      const newSp = Math.max(0, sp - decelMag);
+      if (newSp === 0) {
+        camera.vx = camera.vy = camera.vz = 0;
+      } else {
+        const factor = newSp / sp;
+        camera.vx *= factor;
+        camera.vy *= factor;
+        camera.vz *= factor;
+      }
+    }
+  }
 
-window.addEventListener("mouseup", (e) => {
-  if (e.button === 0) mouseButtons.left = false;
-  if (e.button === 2) mouseButtons.right = false;
-});
+  // Límite de velocidad máxima
+  const sp = Math.hypot(camera.vx, camera.vy, camera.vz);
+  if (sp > maxSpd) {
+    const s = maxSpd / sp;
+    camera.vx *= s; camera.vy *= s; camera.vz *= s;
+  }
 
-document.addEventListener("pointerlockchange", () => {
-  if (document.pointerLockElement === ctx.canvas)
-    document.addEventListener("mousemove", mouseMove);
-  else
-    document.removeEventListener("mousemove", mouseMove);
-});
-
-function mouseMove(e) {
-  const sens = 0.002;
-  const up    = rotateVectorByQuat([0,1,0], camera.q);
-  const right = rotateVectorByQuat([1,0,0], camera.q);
-  const yawQ   = quatFromAxisAngle(up,    e.movementX * sens);
-  const pitchQ = quatFromAxisAngle(right, e.movementY * sens);
-  camera.q = quatNormalize(quatMultiply(pitchQ, quatMultiply(yawQ, camera.q)));
-}
-
-function updateCamera(dt) {
-  const acc    = settings.accFactor;
-  const maxSpd = settings.turboEnabled ? 2048 : 512;
-  const decel  = normBaseDecel * (settings.turboEnabled ? 8 : 1);
-
-  let move = [0,0,0];
-  if (keys["KeyW"]) move[2] += 1;
-  if (keys["KeyS"]) move[2] -= 1;
-  if (keys["KeyA"]) move[0] -= 1;
-  if (keys["KeyD"]) move[0] += 1;
-  if (keys["KeyR"]) move[1] += 1;
-  if (keys["KeyF"]) move[1] -= 1;
-
-  if (mouseButtons.right) move[2] += 1;
-  if (mouseButtons.left)  move[2] -= 1;
-
-  const len = Math.hypot(...move);
-  if (len > 0) move = move.map(m => m / len);
-
-  const worldAcc = rotateVectorByQuat(move, camera.q).map(v => v * acc * dt);
-
-  if (keys["ShiftLeft"]) {
+  // ---- 4. Frenado manual (X) ----
+  if (inputManager.isBraking()) {
     const sv = [camera.vx, camera.vy, camera.vz];
     const sp = Math.hypot(...sv);
-    // Evitar división por cero si la velocidad es cero
     if (sp > 0) {
-      const dv = sv.map(v => -v/sp * decel * dt);
+      const dv = sv.map(v => -v / sp * decel * dt);
       const newV = [camera.vx + dv[0], camera.vy + dv[1], camera.vz + dv[2]];
       const newSp = Math.hypot(...newV);
       if (newSp > sp) {
@@ -152,49 +178,33 @@ function updateCamera(dt) {
         camera.vz = newV[2];
       }
     }
-  } else {
-    camera.vx += worldAcc[0];
-    camera.vy += worldAcc[1];
-    camera.vz += worldAcc[2];
-    const sp = Math.hypot(camera.vx, camera.vy, camera.vz);
-    if (sp > maxSpd) {
-      const s = maxSpd / sp;
-      camera.vx *= s; camera.vy *= s; camera.vz *= s;
-    }
   }
 
-  const forward = rotateVectorByQuat([0,0,-1], camera.q);
-  if (keys["KeyQ"]) {
-    const rQ = quatFromAxisAngle(forward,  0.03);
-    camera.q = quatNormalize(quatMultiply(rQ, camera.q));
-  }
-  if (keys["KeyE"]) {
-    const rQ = quatFromAxisAngle(forward, -0.03);
-    camera.q = quatNormalize(quatMultiply(rQ, camera.q));
-  }
-
+  // ---- 5. Actualizar posición ----
   camera.x += camera.vx * dt;
   camera.y += camera.vy * dt;
   camera.z += camera.vz * dt;
   camera.speed = Math.hypot(camera.vx, camera.vy, camera.vz);
 }
 
-function project3D(x,y,z) {
+// ========== PROYECCIÓN 3D ==========
+function project3D(x, y, z) {
   let dx = x - camera.x, dy = y - camera.y, dz = z - camera.z;
-  const invQ = [-camera.q[0],-camera.q[1],-camera.q[2],camera.q[3]];
-  [dx,dy,dz] = rotateVectorByQuat([dx,dy,dz], invQ);
-  const scale = FOV/(dz||0.0001);
+  const invQ = [-camera.q[0], -camera.q[1], -camera.q[2], camera.q[3]];
+  [dx, dy, dz] = rotateVectorByQuat([dx, dy, dz], invQ);
+  const scale = FOV / (dz || 0.0001);
   return {
-    x: ctx.canvas.width/2 + dx*scale,
-    y: ctx.canvas.height/2 - dy*scale,
+    x: ctx.canvas.width / 2 + dx * scale,
+    y: ctx.canvas.height / 2 - dy * scale,
     visible: dz > 1,
     scale: scale
   };
 }
 
-function chunkKey(cx,cy,cz) { return `${cx},${cy},${cz}`; }
+// ========== CHUNKS ==========
+function chunkKey(cx, cy, cz) { return `${cx},${cy},${cz}`; }
 
-function generateChunk(cx,cy,cz) {
+function generateChunk(cx, cy, cz) {
   const stars = [];
   let chunkSeed = (globalSeed * 31 + cx) * 31 + cy;
   chunkSeed = (chunkSeed * 31 + cz) & 0x7fffffff;
@@ -206,16 +216,16 @@ function generateChunk(cx,cy,cz) {
       z: cz * chunkSize + rng() * chunkSize
     });
   }
-  chunks[chunkKey(cx,cy,cz)] = stars;
+  chunks[chunkKey(cx, cy, cz)] = stars;
 }
 
 function unloadDistantChunks(cx, cy, cz) {
   const limit = renderDistanceChunks;
   const limitSq = limit * limit;
   for (const key in chunks) {
-    const [x,y,z] = key.split(",").map(Number);
+    const [x, y, z] = key.split(",").map(Number);
     const dx = x - cx, dy = y - cy, dz = z - cz;
-    if (dx*dx + dy*dy + dz*dz > limitSq) delete chunks[key];
+    if (dx * dx + dy * dy + dz * dz > limitSq) delete chunks[key];
   }
 }
 
@@ -229,23 +239,65 @@ function updateChunks() {
   for (let dx = -limit; dx <= limit; dx++) {
     for (let dy = -limit; dy <= limit; dy++) {
       for (let dz = -limit; dz <= limit; dz++) {
-        if (dx*dx + dy*dy + dz*dz > limitSq) continue;
-        const key = chunkKey(cx+dx, cy+dy, cz+dz);
-        if (!chunks[key]) generateChunk(cx+dx, cy+dy, cz+dz);
+        if (dx * dx + dy * dy + dz * dz > limitSq) continue;
+        const key = chunkKey(cx + dx, cy + dy, cz + dz);
+        if (!chunks[key]) generateChunk(cx + dx, cy + dy, cz + dz);
       }
     }
   }
   unloadDistantChunks(cx, cy, cz);
 }
 
+// ========== BUCLE PRINCIPAL ==========
 let last = performance.now();
 
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
+
+  // Procesar comandos de InputManager (toggles, potencia)
+  if (inputManager.consumeTurboToggle()) {
+    settings.turboEnabled = !settings.turboEnabled;
+    if (settings.turboEnabled) {
+      settings.accFactor = Math.min(turbAccMax, settings.accFactor * 8);
+    } else {
+      settings.accFactor = Math.max(normAccMin, settings.accFactor / 8);
+    }
+  }
+
+  // Potencia manual con rueda del ratón y teclas F / V
+  const powerDelta = inputManager.consumePowerDelta();
+  if (powerDelta !== 0) {
+    const step = mouseWheelStep * (settings.turboEnabled ? 8 : 1);
+    settings.accFactor += powerDelta * step;
+    const min = settings.turboEnabled ? turbAccMin : normAccMin;
+    const max = settings.turboEnabled ? turbAccMax : normAccMax;
+    settings.accFactor = Math.max(min, Math.min(max, settings.accFactor));
+  }
+
+  if (inputManager.consumeFrustumToggle()) {
+    frustumCullingEnabled = !frustumCullingEnabled;
+    console.log("Frustum culling:", frustumCullingEnabled ? "ON" : "OFF");
+  }
+
+  if (inputManager.consumeInfoHudToggle()) {
+    window.showInfoHud = !window.showInfoHud;
+  }
+
+  // ========== Toggles de modo (R y U) ==========
+  if (inputManager.consumeMovementAutoBrakeToggle()) {
+    movementAutoBrake = !movementAutoBrake;
+    console.log("Modo movimiento - frenado automático:", movementAutoBrake ? "ON" : "OFF");
+  }
+  if (inputManager.consumeRotationAutoDampToggle()) {
+    rotationAutoDamp = !rotationAutoDamp;
+    console.log("Modo rotación - damping automático:", rotationAutoDamp ? "ON" : "OFF");
+  }
+
   updateCamera(dt);
   updateChunks();
 
+  // FPS
   frameCount++;
   const nowSec = performance.now();
   if (nowSec - lastFpsUpdate >= 1000) {
@@ -254,6 +306,7 @@ function loop(now) {
     lastFpsUpdate = nowSec;
   }
 
+  // Render
   ctx.fillStyle = 'black';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -284,24 +337,19 @@ function loop(now) {
       const [rx, ry, rz] = rotateVectorByQuat([dx, dy, dz], invQ);
       if (rz <= 1) continue;
 
-      // ========== FRUSTUM CULLING (F2) ==========
       if (frustumCullingEnabled) {
         const halfW = ctx.canvas.width / 2;
         const halfH = ctx.canvas.height / 2;
         const limitX = halfW * rz / FOV;
         const limitY = halfH * rz / FOV;
-        if (Math.abs(rx) > limitX || Math.abs(ry) > limitY) {
-          continue; // Fuera del campo de visión
-        }
+        if (Math.abs(rx) > limitX || Math.abs(ry) > limitY) continue;
       }
-      // =========================================
 
       const scale = FOV / rz;
       const px = ctx.canvas.width / 2 + rx * scale;
       const py = ctx.canvas.height / 2 - ry * scale;
 
       let baseBrightness = Math.min(1, scale * 2.0 + 0.15);
-
       let directionalFactor = 1.0;
       if (speedTotal > 0.01) {
         const invDist = 1 / dist;
@@ -314,15 +362,9 @@ function loop(now) {
       }
 
       let brightness = baseBrightness * distanceFade * directionalFactor;
-
-      if (dist < LOD_NEAR_DIST) {
-        brightness *= nearStarBrightnessBoost;
-      } else if (dist < LOD_MID_DIST) {
-        brightness *= midStarBrightnessBoost;
-      }
-      if (dist >= LOD_MID_DIST) {
-        brightness *= farStarBrightnessBoost;
-      }
+      if (dist < LOD_NEAR_DIST) brightness *= nearStarBrightnessBoost;
+      else if (dist < LOD_MID_DIST) brightness *= midStarBrightnessBoost;
+      if (dist >= LOD_MID_DIST) brightness *= farStarBrightnessBoost;
 
       brightness = Math.min(1, Math.max(0, brightness));
       if (brightness <= 0.02) continue;
@@ -350,11 +392,11 @@ function loop(now) {
         ctx.fillStyle = fillColor;
         ctx.fillRect(px - size/2, py - size/2, size, size);
       }
-
       renderedStars++;
     }
   }
 
+  // Cuerpos celestes
   for (const cb of CelestBody) {
     const p = project3D(cb.x, cb.y, cb.z);
     if (!p.visible) continue;
@@ -371,9 +413,10 @@ function loop(now) {
     }
   }
 
+  // HUDs
   drawHudReticle(ctx);
   drawHudCoords(ctx, camera);
-  drawHudSpeed(ctx, camera, keys, settings.accFactor, settings.turboEnabled);
+  drawHudSpeed(ctx, camera, inputManager.isBraking(), settings.accFactor, settings.turboEnabled);
   drawHudGyro(ctx, camera);
 
   if (window.showInfoHud) {
@@ -383,6 +426,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
+// Inicialización de chunks cercanos
 const startX = Math.floor(camera.x / chunkSize);
 const startY = Math.floor(camera.y / chunkSize);
 const startZ = Math.floor(camera.z / chunkSize);
@@ -391,7 +435,7 @@ const limitSq = limit * limit;
 for (let dx = -limit; dx <= limit; dx++) {
   for (let dy = -limit; dy <= limit; dy++) {
     for (let dz = -limit; dz <= limit; dz++) {
-      if (dx*dx + dy*dy + dz*dz <= limitSq) {
+      if (dx * dx + dy * dy + dz * dz <= limitSq) {
         generateChunk(startX + dx, startY + dy, startZ + dz);
       }
     }
