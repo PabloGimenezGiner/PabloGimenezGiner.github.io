@@ -54,8 +54,87 @@ const ROT_BRAKE_FORCE = 8.0;
 const MAX_ANGULAR_SPEED = 6.0;
 
 // ========== MODOS DE CONDUCCIÓN ==========
-let movementAutoBrake = false;      // frenado automático al soltar teclas (R) (Desactivado intencionalmente)
+let movementAutoBrake = false;      // frenado automático al soltar teclas (R)
 let rotationAutoDamp = true;       // damping automático al soltar giros (U)
+
+// ========== PERSISTENCIA ==========
+const SAVE_KEY = 'spaceGameSave';
+let saveInterval = null;
+
+function saveGame() {
+  const saveData = {
+    // Cámara
+    x: camera.x,
+    y: camera.y,
+    z: camera.z,
+    vx: camera.vx,
+    vy: camera.vy,
+    vz: camera.vz,
+    q: [...camera.q],        // copia del cuaternión
+    // Settings
+    turboEnabled: settings.turboEnabled,
+    accFactor: settings.accFactor,
+    // Modos
+    movementAutoBrake: movementAutoBrake,
+    rotationAutoDamp: rotationAutoDamp,
+    frustumCullingEnabled: frustumCullingEnabled,
+    showInfoHud: window.showInfoHud,
+    // Semilla
+    globalSeed: globalSeed
+  };
+  localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+  console.log("Juego guardado automáticamente");
+}
+
+function loadGame() {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (!raw) {
+    console.log("No hay partida guardada. Iniciando nueva.");
+    return false;
+  }
+  try {
+    const data = JSON.parse(raw);
+    // Restaurar cámara
+    camera.x = data.x ?? inicX;
+    camera.y = data.y ?? inicY;
+    camera.z = data.z ?? inicZ;
+    camera.vx = data.vx ?? inicVX;
+    camera.vy = data.vy ?? inicVY;
+    camera.vz = data.vz ?? inicVZ;
+    if (data.q && Array.isArray(data.q) && data.q.length === 4) {
+      camera.q = data.q;
+    } else {
+      camera.q = [0,0,0,1];
+    }
+    // Restaurar settings
+    settings.turboEnabled = data.turboEnabled ?? inicTurboEnabled;
+    settings.accFactor = data.accFactor ?? inicAccFactor;
+    // Restaurar modos
+    movementAutoBrake = data.movementAutoBrake ?? false;
+    rotationAutoDamp = data.rotationAutoDamp ?? true;
+    frustumCullingEnabled = data.frustumCullingEnabled ?? true;
+    window.showInfoHud = data.showInfoHud ?? false;
+    // Restaurar semilla
+    globalSeed = data.globalSeed ?? Math.floor(Math.random() * 1000000);
+    
+    console.log("Partida cargada correctamente");
+    return true;
+  } catch (e) {
+    console.error("Error al cargar la partida:", e);
+    return false;
+  }
+}
+
+function startAutoSave() {
+  if (saveInterval) clearInterval(saveInterval);
+  saveInterval = setInterval(() => saveGame(), 5000); // cada 5 segundos
+}
+
+window.addEventListener('beforeunload', () => {
+  saveGame();
+});
+
+// =================================================
 
 // ========== FUNCIONES DE CÁMARA ==========
 function updateCamera(dt) {
@@ -426,7 +505,26 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-// Inicialización de chunks cercanos
+// ========== INICIALIZACIÓN CON PERSISTENCIA ==========
+// Cargar partida guardada ANTES de generar chunks
+const loaded = loadGame();
+
+// Si no se cargó una partida, aseguramos valores por defecto
+if (!loaded) {
+  // Los valores ya están inicializados, pero forzamos consistencia
+  camera.x = inicX; camera.y = inicY; camera.z = inicZ;
+  camera.vx = inicVX; camera.vy = inicVY; camera.vz = inicVZ;
+  camera.q = [0,0,0,1];
+  settings.turboEnabled = inicTurboEnabled;
+  settings.accFactor = inicAccFactor;
+  movementAutoBrake = false;
+  rotationAutoDamp = true;
+  frustumCullingEnabled = true;
+  window.showInfoHud = false;
+  // globalSeed ya tiene valor aleatorio
+}
+
+// Inicializar chunks después de cargar la cámara
 const startX = Math.floor(camera.x / chunkSize);
 const startY = Math.floor(camera.y / chunkSize);
 const startZ = Math.floor(camera.z / chunkSize);
@@ -441,5 +539,8 @@ for (let dx = -limit; dx <= limit; dx++) {
     }
   }
 }
+
+// Iniciar guardado automático
+startAutoSave();
 
 requestAnimationFrame(loop);
