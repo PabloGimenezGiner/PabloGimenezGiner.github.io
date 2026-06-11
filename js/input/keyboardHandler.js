@@ -2,27 +2,23 @@
 export default class KeyboardHandler {
     constructor(inputManager) {
         this.inputManager = inputManager;
+        this.uiManager = null;
         
         this.keys = {
-            // Movimiento
             KeyW: false, KeyS: false,
             KeyA: false, KeyD: false,
             KeyQ: false, KeyE: false,
-            // Rotaciones
             KeyI: false, KeyP: false,
             KeyO: false, KeyL: false,
             KeyK: false,
-            // Frenos
-            KeyX: false,     // freno lineal
-            Comma: false,    // freno rotacional (tecla ,;)
-            // Modos de conducción
+            KeyX: false,
+            Comma: false,
             KeyR: false,
             KeyU: false,
-            // Control de potencia
-            KeyC: false,     // NUEVO: turbo toggle
-            KeyF: false,     // aumentar potencia
-            KeyV: false,     // disminuir potencia
-            // Funciones
+            KeyC: false,
+            KeyF: false,
+            KeyV: false,
+            Escape: false,
             F2: false, F4: false
         };
         
@@ -35,6 +31,11 @@ export default class KeyboardHandler {
         
         window.addEventListener('keydown', this.onKeyDown.bind(this));
         window.addEventListener('keyup', this.onKeyUp.bind(this));
+    }
+    
+    setUIManager(uiManager) {
+        this.uiManager = uiManager;
+        console.log("✅ UIManager conectado al teclado");
     }
     
     updateMoveAndBraking() {
@@ -111,16 +112,24 @@ export default class KeyboardHandler {
                 return;
             }
             if (code === 'KeyC') {
-                // Turbo toggle (igual que botón central del ratón)
                 this.inputManager.onTurboToggle();
                 return;
             }
             if (code === 'KeyF') {
-                this.inputManager.onMouseWheel(1);   // aumentar potencia
+                this.inputManager.onMouseWheel(1);
                 return;
             }
             if (code === 'KeyV') {
-                this.inputManager.onMouseWheel(-1);  // disminuir potencia
+                this.inputManager.onMouseWheel(-1);
+                return;
+            }
+            if (code === 'Escape') {
+                e.preventDefault();
+                // Solo liberar el puntero si está bloqueado
+                if (document.pointerLockElement === this.inputManager.canvas) {
+                    document.exitPointerLock();
+                }
+                // El menú se abrirá automáticamente al detectar pointerlockchange
                 return;
             }
             

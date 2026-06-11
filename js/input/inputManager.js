@@ -18,15 +18,27 @@ class InputManager {
         this.frustumToggleRequest = false;
         this.infoHudToggleRequest = false;
         
-        // Toggles de modo
         this.movementAutoBrakeToggleRequest = false;
         this.rotationAutoDampToggleRequest = false;
+        this.guiToggleRequest = false;
         
         this._mouseForward = 0;
         this._mouseBackward = 0;
         
+        // Nuevo: estado de pausa
+        this.paused = false;
+        
         this.keyboard = new KeyboardHandler(this);
         this.mouse = new MouseHandler(canvas, this);
+    }
+    
+    setPaused(paused) {
+        this.paused = paused;
+        if (paused) {
+            // Al pausar, descartamos cualquier rotación acumulada para evitar saltos
+            this.rotationDelta.yaw = 0;
+            this.rotationDelta.pitch = 0;
+        }
     }
     
     onKeyMove(x, y, z, braking, rotBraking) {
@@ -65,7 +77,13 @@ class InputManager {
         this.rotationAutoDampToggleRequest = true;
     }
     
+    onGuiToggle() {
+        this.guiToggleRequest = true;
+    }
+    
     onMouseMove(deltaYaw, deltaPitch) {
+        // Ignorar movimientos del ratón si el juego está pausado
+        if (this.paused) return;
         this.rotationDelta.yaw += deltaYaw;
         this.rotationDelta.pitch += deltaPitch;
     }
@@ -102,25 +120,11 @@ class InputManager {
         return delta;
     }
     
-    getRollDirection() {
-        return this.rollDirection;
-    }
-    
-    getPitchDirection() {
-        return this.pitchDirection;
-    }
-    
-    getYawDirection() {
-        return this.yawDirection;
-    }
-    
-    isBraking() {
-        return this.braking;
-    }
-    
-    isRotBraking() {
-        return this.rotBraking;
-    }
+    getRollDirection() { return this.rollDirection; }
+    getPitchDirection() { return this.pitchDirection; }
+    getYawDirection() { return this.yawDirection; }
+    isBraking() { return this.braking; }
+    isRotBraking() { return this.rotBraking; }
     
     consumePowerDelta() {
         const delta = this.powerDelta;
@@ -163,6 +167,14 @@ class InputManager {
     consumeRotationAutoDampToggle() {
         if (this.rotationAutoDampToggleRequest) {
             this.rotationAutoDampToggleRequest = false;
+            return true;
+        }
+        return false;
+    }
+    
+    consumeGuiToggle() {
+        if (this.guiToggleRequest) {
+            this.guiToggleRequest = false;
             return true;
         }
         return false;
