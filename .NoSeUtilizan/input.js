@@ -1,5 +1,5 @@
-import { NORMAL_ACC_MIN, WHEEL_STEP, NORMAL_ACC_MAX, TURBO_ACC_MIN, 
-TURBO_ACC_MAX, BASE_DECEL, camera, keys, turboEnabled, accFactor} from './variables.js';
+/*import { NORMAL_ACC_MIN, WHEEL_STEP, NORMAL_ACC_MAX, TURBO_ACC_MIN, 
+TURBO_ACC_MAX, BASE_DECEL, camera, keys, turboEnabled, accFactor} from './variables.js';*/
 
 export function setupInputs(canvas) {
   document.addEventListener("keydown", e => { keys[e.code] = true; });

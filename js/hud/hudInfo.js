@@ -1,6 +1,8 @@
 // hud/hudInfo.js
+import { showInfoHud } from '../core/gameState.js';
+
 export function drawHudInfo(ctx, fps, starCount, chunkCount, renderDistance, starsPerChunk, globalSeed) {
-    if (!window.showInfoHud) return; // controlado por tecla F4
+    if (!showInfoHud) return;
 
     const padding = 10;
     const lineHeight = 20;
@@ -12,7 +14,6 @@ export function drawHudInfo(ctx, fps, starCount, chunkCount, renderDistance, sta
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    // Ahora son 6 líneas: FPS, Estrellas, Chunks activos, Radio chunks, Estrellas/chunk, Semilla
     ctx.fillRect(x - 5, y - 5, 260, lineHeight * 6 + 10);
     ctx.fillStyle = '#0f0';
     ctx.fillText(`FPS: ${fps.toFixed(1)}`, x, y); y += lineHeight;

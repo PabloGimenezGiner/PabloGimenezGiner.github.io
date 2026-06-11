@@ -1,6 +1,6 @@
-import { NORMAL_ACC_MIN, WHEEL_STEP, NORMAL_ACC_MAX, TURBO_ACC_MIN, 
+/*import { NORMAL_ACC_MIN, WHEEL_STEP, NORMAL_ACC_MAX, TURBO_ACC_MIN, 
 TURBO_ACC_MAX, BASE_DECEL, chunkSize, starsPerChunk, camera, keys,
-turboEnabled, accFactor, chunks } from './variables.js';
+turboEnabled, accFactor, chunks } from './variables.js';*/
 
 export function quatFromAxisAngle(axis, angle) {
   const half = angle / 2;
