@@ -5,7 +5,6 @@ import { drawHudSpeed } from '../hud/hudSpeed.js';
 import { drawHudGyro } from '../hud/hudGyro.js';
 import { drawHudInfo } from '../hud/hudInfo.js';
 import { showInfoHud, globalSeed } from '../core/gameState.js';
-import { renderDistanceChunks, starsPerChunk } from '../constants.js';
 
 export function drawAllHuds(ctx, camera, inputManager, settings, currentFps, renderedStars, chunkCount) {
   drawHudReticle(ctx);
@@ -13,6 +12,6 @@ export function drawAllHuds(ctx, camera, inputManager, settings, currentFps, ren
   drawHudSpeed(ctx, camera, inputManager.isBraking(), settings.accFactor, settings.turboEnabled);
   drawHudGyro(ctx, camera);
   if (showInfoHud) {
-    drawHudInfo(ctx, currentFps, renderedStars, chunkCount, renderDistanceChunks, starsPerChunk, globalSeed);
+    drawHudInfo(ctx, currentFps, renderedStars, chunkCount, globalSeed);
   }
 }

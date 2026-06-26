@@ -1,7 +1,8 @@
 // hud/hudInfo.js
 import { showInfoHud } from '../core/gameState.js';
+import { constants } from '../constants.js';
 
-export function drawHudInfo(ctx, fps, starCount, chunkCount, renderDistance, starsPerChunk, globalSeed) {
+export function drawHudInfo(ctx, fps, starCount, chunkCount, globalSeed) {
     if (!showInfoHud) return;
 
     const padding = 10;
@@ -19,8 +20,8 @@ export function drawHudInfo(ctx, fps, starCount, chunkCount, renderDistance, sta
     ctx.fillText(`FPS: ${fps.toFixed(1)}`, x, y); y += lineHeight;
     ctx.fillText(`Estrellas: ${starCount}`, x, y); y += lineHeight;
     ctx.fillText(`Chunks activos: ${chunkCount}`, x, y); y += lineHeight;
-    ctx.fillText(`Radio chunks: ${renderDistance}`, x, y); y += lineHeight;
-    ctx.fillText(`Estrellas/chunk: ${starsPerChunk}`, x, y); y += lineHeight;
+    ctx.fillText(`Radio chunks: ${constants.renderDistanceChunks}`, x, y); y += lineHeight;
+    ctx.fillText(`Estrellas/chunk: ${constants.starsPerChunk}`, x, y); y += lineHeight;
     ctx.fillText(`Semilla global: ${globalSeed}`, x, y);
     ctx.restore();
 }

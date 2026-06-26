@@ -1,19 +1,16 @@
 // hud/hudSpeed.js
-import { normAccMin, normAccMax, turbAccMin, turbAccMax, mouseWheelStep } from '../constants.js';
+import { constants } from '../constants.js';
 
 export function drawHudSpeed(ctx, camera, isBraking, accFactor, turboEnabled) {
-  // ——— HUD central inferior – Velocidad y Potencia ———
   const centerX = ctx.canvas.width / 2;
   const speedFontSize = 96;
   const speedY = ctx.canvas.height - 72;
 
-  // Velocidad
   ctx.fillStyle = isBraking ? '#f55' : 'white';
   ctx.font = `${speedFontSize}px monospace`;
   ctx.textAlign = 'center';
   ctx.fillText(camera.speed.toFixed(0), centerX, speedY);
 
-  // Frenado (rectángulos laterales)
   if (isBraking) {
     const rectH = speedFontSize * 0.8;
     const rectW = rectH / 2;
@@ -38,7 +35,6 @@ export function drawHudSpeed(ctx, camera, isBraking, accFactor, turboEnabled) {
     });
   }
 
-  // Barra de potencia
   const barWidthMax = 512;
   const barHeight   = 32;
   const gap         = 8;
@@ -46,9 +42,9 @@ export function drawHudSpeed(ctx, camera, isBraking, accFactor, turboEnabled) {
   const x0 = (ctx.canvas.width - barWidthMax) / 2;
   const y0 = ctx.canvas.height - 16 - barHeight;
 
-  const minAcc = turboEnabled ? turbAccMin : normAccMin;
-  const maxAcc = turboEnabled ? turbAccMax : normAccMax;
-  const step   = turboEnabled ? mouseWheelStep * 8 : mouseWheelStep;
+  const minAcc = turboEnabled ? constants.turbAccMin : constants.normAccMin;
+  const maxAcc = turboEnabled ? constants.turbAccMax : constants.normAccMax;
+  const step   = turboEnabled ? constants.mouseWheelStep * 8 : constants.mouseWheelStep;
   const totalSegments  = Math.floor((maxAcc - minAcc) / step);
   const currentSegment = Math.floor((accFactor - minAcc) / step);
   const segW = (barWidthMax - gap * (totalSegments - 1)) / totalSegments;
@@ -70,7 +66,6 @@ export function drawHudSpeed(ctx, camera, isBraking, accFactor, turboEnabled) {
     ctx.fill();
   }
 
-  // Marcadores de mínimo
   if (currentSegment === 0) {
     const markerW = barHeight / 4;
     const markerH = barHeight;

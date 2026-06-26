@@ -123,13 +123,11 @@ export default class KeyboardHandler {
                 this.inputManager.onMouseWheel(-1);
                 return;
             }
+            // ESC: lo dejamos como respaldo, pero la lógica principal está en pointerlockchange
             if (code === 'Escape') {
-                e.preventDefault();
-                // Solo liberar el puntero si está bloqueado
-                if (document.pointerLockElement === this.inputManager.canvas) {
-                    document.exitPointerLock();
+                if (this.uiManager) {
+                    this.uiManager.toggleMenu();
                 }
-                // El menú se abrirá automáticamente al detectar pointerlockchange
                 return;
             }
             

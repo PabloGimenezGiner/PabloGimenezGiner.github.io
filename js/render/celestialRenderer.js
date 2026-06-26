@@ -1,5 +1,5 @@
 // render/celestialRenderer.js
-import { CelestBody } from '../CelestBody.js';
+import { CelestBody } from '../celestBody.js';
 import { project3D } from '../camera/cameraPhysics.js';
 
 export function renderCelestials(ctx, camera) {
