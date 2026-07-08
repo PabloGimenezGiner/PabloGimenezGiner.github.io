@@ -45,31 +45,6 @@ export const ROT_DAMP = 0.96;
 export const ROT_BRAKE_FORCE = 8.0;
 export const MAX_ANGULAR_SPEED = 6.0;
 
-// ===== PATH TRACKING OPTIMIZADO =====
-export let pathPoints = [];
-export let pathTrackingEnabled = true;
-export let pathVisible = true;
-export let pathPersistent = false;
-export let maxPathPoints = 200;
-export let pathMinDistance = 10;
-export let pathAngleThreshold = 0.15;
-export let pathSpeedFactor = 0.5;
-export let pathSimplifyTolerance = 1.0;
-export let totalDistance = 0;
-
-export function setPathTrackingEnabled(value) { pathTrackingEnabled = value; }
-export function setPathVisible(value) { pathVisible = value; }
-export function setPathPersistent(value) { pathPersistent = value; }
-export function setMaxPathPoints(value) { maxPathPoints = Math.max(10, Math.floor(value)); }
-export function setPathMinDistance(value) { pathMinDistance = Math.max(0.5, value); }
-export function setPathAngleThreshold(value) { pathAngleThreshold = Math.max(0.01, value); }
-export function setPathSpeedFactor(value) { pathSpeedFactor = Math.max(0, Math.min(1, value)); }
-export function setPathSimplifyTolerance(value) { pathSimplifyTolerance = Math.max(0.01, value); }
-export function clearPath() { pathPoints.length = 0; totalDistance = 0; }
-export function addDistance(dist) { if (dist > 0) totalDistance += dist; }
-export function resetTotalDistance() { totalDistance = 0; }
-export function setTotalDistance(value) { totalDistance = value; }  // <-- setter para carga
-
 // ===== FUNCIONES SETTER =====
 export function setMovementAutoBrake(value) { movementAutoBrake = value; }
 export function setRotationAutoDamp(value) { rotationAutoDamp = value; }
@@ -101,7 +76,6 @@ export function resetGameState() {
     delete chunks[key];
   }
   
-  clearPath(); // resetea puntos y distancia
-  
+  // Ya no hay path aquí; se resetea en el pathManager
   console.log("🔄 Posición y chunks reiniciados (ajustes intactos)");
 }

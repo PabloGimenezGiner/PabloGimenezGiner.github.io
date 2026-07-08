@@ -4,16 +4,9 @@ import {
   frustumCullingEnabled, showInfoHud, pauseGameOnMenu,
   setMovementAutoBrake, setRotationAutoDamp,
   setFrustumCulling, setShowInfoHud, setGlobalSeed, setPauseGameOnMenu,
-  pathTrackingEnabled, maxPathPoints, pathMinDistance, pathAngleThreshold,
-  pathSpeedFactor, pathSimplifyTolerance, pathPoints, pathVisible, pathPersistent,
-  totalDistance,
-  setPathTrackingEnabled, setMaxPathPoints, setPathMinDistance,
-  setPathAngleThreshold, setPathSpeedFactor, setPathSimplifyTolerance,
-  setPathVisible, setPathPersistent,
-  setTotalDistance,  // <-- importar setter
-  clearPath
 } from './gameState.js';
 import { constants } from '../constants.js';
+import pathManager from '../render/path/pathManager.js';   // <-- NUEVO
 
 const SAVE_KEY = 'spaceGameSave';
 const CONSTANTS_KEY = 'spaceGameConstants';
@@ -32,16 +25,8 @@ export function saveGame() {
     showInfoHud: showInfoHud,
     pauseGameOnMenu: pauseGameOnMenu,
     globalSeed: globalSeed,
-    pathTrackingEnabled: pathTrackingEnabled,
-    pathVisible: pathVisible,
-    pathPersistent: pathPersistent,
-    maxPathPoints: maxPathPoints,
-    pathMinDistance: pathMinDistance,
-    pathAngleThreshold: pathAngleThreshold,
-    pathSpeedFactor: pathSpeedFactor,
-    pathSimplifyTolerance: pathSimplifyTolerance,
-    pathPoints: pathPoints,
-    totalDistance: totalDistance
+    // Guardar datos del path manager
+    pathData: pathManager.getData(),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
   console.log("Juego guardado automáticamente");
@@ -71,31 +56,12 @@ export function loadGame() {
     setShowInfoHud(data.showInfoHud ?? false);
     setPauseGameOnMenu(data.pauseGameOnMenu ?? true);
     setGlobalSeed(data.globalSeed ?? Math.floor(Math.random() * 1000000));
-    // PATH TRACKING
-    setPathTrackingEnabled(data.pathTrackingEnabled ?? true);
-    setPathVisible(data.pathVisible ?? true);
-    setPathPersistent(data.pathPersistent ?? false);
-    setMaxPathPoints(data.maxPathPoints ?? 200);
-    setPathMinDistance(data.pathMinDistance ?? 10);
-    setPathAngleThreshold(data.pathAngleThreshold ?? 0.15);
-    setPathSpeedFactor(data.pathSpeedFactor ?? 0.5);
-    setPathSimplifyTolerance(data.pathSimplifyTolerance ?? 1.0);
-    // Restaurar puntos (mutando array)
-    if (data.pathPoints && Array.isArray(data.pathPoints)) {
-      const max = pathPersistent ? Infinity : maxPathPoints;
-      let newPoints;
-      if (data.pathPoints.length > max && max !== Infinity) {
-        newPoints = data.pathPoints.slice(data.pathPoints.length - max);
-      } else {
-        newPoints = data.pathPoints;
-      }
-      pathPoints.length = 0;
-      pathPoints.push(...newPoints);
+    // Restaurar datos del path manager
+    if (data.pathData) {
+      pathManager.restoreData(data.pathData);
     } else {
-      clearPath();
+      pathManager.clear();
     }
-    // Restaurar distancia total usando el setter
-    setTotalDistance(data.totalDistance ?? 0);
     console.log("Partida cargada correctamente");
     return true;
   } catch (e) {

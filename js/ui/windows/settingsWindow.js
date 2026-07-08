@@ -3,25 +3,7 @@ import {
   constants
 } from '../../constants.js';
 import { saveConstants, resetConstantsToDefaults } from '../../core/persistence.js';
-import {
-  pathTrackingEnabled,
-  pathVisible,
-  pathPersistent,
-  maxPathPoints,
-  pathMinDistance,
-  pathAngleThreshold,
-  pathSpeedFactor,
-  pathSimplifyTolerance,
-  setPathTrackingEnabled,
-  setPathVisible,
-  setPathPersistent,
-  setMaxPathPoints,
-  setPathMinDistance,
-  setPathAngleThreshold,
-  setPathSpeedFactor,
-  setPathSimplifyTolerance,
-  clearPath
-} from '../../core/gameState.js';
+import pathManager from '../../render/path/pathManager.js';
 
 // Función para generar campos de entrada para constantes
 function generateInputs() {
@@ -76,6 +58,10 @@ function generateInputs() {
 }
 
 export function renderSettings() {
+  // Determinar si la simplificación está activa (tolerance > 0)
+  const simplifyActive = pathManager.simplifyTolerance > 0;
+  const simplifyValue = pathManager.simplifyTolerance;
+
   return `
     <h3 style="margin-top:0; margin-bottom:16px;">⚙️ Ajustes avanzados</h3>
     <div style="padding-right:4px;">
@@ -86,43 +72,74 @@ export function renderSettings() {
       <h4 style="margin:16px 0 8px 0; color:#ccc;">📍 Registro de ruta (optimizado)</h4>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Activar ruta</label>
-        <input type="checkbox" id="path-enabled" ${pathTrackingEnabled ? 'checked' : ''}
+        <input type="checkbox" id="path-enabled" ${pathManager.enabled ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Mostrar ruta</label>
-        <input type="checkbox" id="path-visible" ${pathVisible ? 'checked' : ''}
+        <input type="checkbox" id="path-visible" ${pathManager.visible ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Ruta persistente</label>
-        <input type="checkbox" id="path-persistent" ${pathPersistent ? 'checked' : ''}
+        <input type="checkbox" id="path-persistent" ${pathManager.persistent ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Máx. puntos</label>
-        <input type="number" id="path-maxpoints" value="${maxPathPoints}" min="10" max="5000" step="10"
+        <input type="number" id="path-maxpoints" value="${pathManager.maxPoints}" min="10" max="5000" step="10"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Dist. mínima</label>
-        <input type="number" id="path-mindist" value="${pathMinDistance}" min="0.5" max="100" step="0.5"
+        <input type="number" id="path-mindist" value="${pathManager.minDistance}" min="0.5" max="100" step="0.5"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Umbral ángulo</label>
-        <input type="number" id="path-angle" value="${pathAngleThreshold}" min="0.01" max="1.0" step="0.01"
+        <input type="number" id="path-angle" value="${pathManager.angleThreshold}" min="0.01" max="1.0" step="0.01"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Factor velocidad</label>
-        <input type="number" id="path-speedfactor" value="${pathSpeedFactor}" min="0" max="1" step="0.05"
+        <input type="number" id="path-speedfactor" value="${pathManager.speedFactor}" min="0" max="1" step="0.05"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
+      </div>
+      
+      <!-- Simplificación con checkbox -->
+      <div style="display:flex; align-items:center; margin:4px 0;">
+        <label style="width:180px; font-size:13px; color:#aaa;">Simplificar (DP)</label>
+        <input type="checkbox" id="path-simplify-enable" ${simplifyActive ? 'checked' : ''}
+               style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
         <label style="width:180px; font-size:13px; color:#aaa;">Tolerancia simplif.</label>
-        <input type="number" id="path-simplify" value="${pathSimplifyTolerance}" min="0" max="10" step="0.1"
+        <input type="number" id="path-simplify" value="${simplifyValue}" min="0" max="10" step="0.1"
+               style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;"
+               ${simplifyActive ? '' : 'disabled'}>
+      </div>
+      
+      <hr style="border-color: rgba(255,255,255,0.08); margin: 16px 0;">
+      <h4 style="margin:16px 0 8px 0; color:#ccc;">🔵 Filtro BQS (control de frecuencia)</h4>
+      <div style="display:flex; align-items:center; margin:4px 0;">
+        <label style="width:180px; font-size:13px; color:#aaa;">Epsilon BQS</label>
+        <input type="number" id="path-bqs-epsilon" value="${pathManager.bqsEpsilonBase}" min="0.1" max="100" step="0.5"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
+      </div>
+      <div style="display:flex; align-items:center; margin:4px 0;">
+        <label style="width:180px; font-size:13px; color:#aaa;">Factor velocidad BQS</label>
+        <input type="number" id="path-bqs-speedfactor" value="${pathManager.bqsSpeedFactor}" min="0" max="1" step="0.05"
+               style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
+      </div>
+      <div style="display:flex; align-items:center; margin:4px 0;">
+        <label style="width:180px; font-size:13px; color:#aaa;">Intervalo mínimo (ms)</label>
+        <input type="number" id="path-mintime" value="${pathManager.minTimeBetweenPoints}" min="10" max="500" step="10"
+               style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
+      </div>
+      <div style="display:flex; align-items:center; margin:4px 0;">
+        <label style="width:180px; font-size:13px; color:#aaa;">Forzar en cambio de ángulo</label>
+        <input type="checkbox" id="path-force-angle" ${pathManager.forceOnAngleChange ? 'checked' : ''}
+               style="width:20px; height:20px; cursor:pointer;">
       </div>
       <button id="path-clear" style="margin-top:6px; padding:8px 12px; background:rgba(200,100,100,0.2); border:1px solid rgba(200,100,100,0.3); border-radius:8px; color:#fff; font-family:inherit; font-size:13px; cursor:pointer;">
         🗑️ Borrar ruta
@@ -148,6 +165,7 @@ export function setupSettingsEvents(container, onApply) {
   const resetBtn = container.querySelector('#settings-reset');
   const feedback = container.querySelector('#settings-feedback');
 
+  // Campos de ruta
   const pathEnabled = container.querySelector('#path-enabled');
   const pathVisible = container.querySelector('#path-visible');
   const pathPersistentChk = container.querySelector('#path-persistent');
@@ -155,10 +173,23 @@ export function setupSettingsEvents(container, onApply) {
   const pathMinDist = container.querySelector('#path-mindist');
   const pathAngle = container.querySelector('#path-angle');
   const pathSpeedFactor = container.querySelector('#path-speedfactor');
+  const pathSimplifyEnable = container.querySelector('#path-simplify-enable');
   const pathSimplify = container.querySelector('#path-simplify');
   const pathClear = container.querySelector('#path-clear');
 
-  // ── Al activar persistente, forzar mostrar ruta ──
+  // Campos BQS
+  const pathBqsEpsilon = container.querySelector('#path-bqs-epsilon');
+  const pathBqsSpeedFactor = container.querySelector('#path-bqs-speedfactor');
+  const pathMinTime = container.querySelector('#path-mintime');
+  const pathForceAngle = container.querySelector('#path-force-angle');
+
+  // Control de habilitación del campo de tolerancia
+  if (pathSimplifyEnable && pathSimplify) {
+    pathSimplifyEnable.addEventListener('change', () => {
+      pathSimplify.disabled = !pathSimplifyEnable.checked;
+    });
+  }
+
   if (pathPersistentChk) {
     pathPersistentChk.addEventListener('change', () => {
       if (pathPersistentChk.checked && pathVisible) {
@@ -169,7 +200,7 @@ export function setupSettingsEvents(container, onApply) {
 
   if (pathClear) {
     pathClear.addEventListener('click', () => {
-      clearPath();
+      pathManager.clear();
       feedback.textContent = '🗑️ Ruta borrada';
       feedback.style.opacity = '1';
       setTimeout(() => { feedback.style.opacity = '0'; }, 1500);
@@ -191,38 +222,61 @@ export function setupSettingsEvents(container, onApply) {
         }
       });
 
-      // Leer checkboxes
-      if (pathEnabled) setPathTrackingEnabled(pathEnabled.checked);
-      if (pathVisible) setPathVisible(pathVisible.checked);
+      // Aplicar configuraciones de ruta
+      if (pathEnabled) pathManager.setEnabled(pathEnabled.checked);
+      if (pathVisible) pathManager.setVisible(pathVisible.checked);
       if (pathPersistentChk) {
         const persistent = pathPersistentChk.checked;
-        setPathPersistent(persistent);
-        // Si persistente está activo, asegurar que visible también lo esté
+        pathManager.setPersistent(persistent);
         if (persistent && pathVisible) {
-          setPathVisible(true);
+          pathManager.setVisible(true);
           pathVisible.checked = true;
         }
       }
-      
       if (pathMaxPoints) {
         const val = parseInt(pathMaxPoints.value);
-        if (!isNaN(val) && val > 0) setMaxPathPoints(val);
+        if (!isNaN(val) && val > 0) pathManager.setMaxPoints(val);
       }
       if (pathMinDist) {
         const val = parseFloat(pathMinDist.value);
-        if (!isNaN(val) && val > 0) setPathMinDistance(val);
+        if (!isNaN(val) && val > 0) pathManager.setMinDistance(val);
       }
       if (pathAngle) {
         const val = parseFloat(pathAngle.value);
-        if (!isNaN(val) && val > 0) setPathAngleThreshold(val);
+        if (!isNaN(val) && val > 0) pathManager.setAngleThreshold(val);
       }
       if (pathSpeedFactor) {
         const val = parseFloat(pathSpeedFactor.value);
-        if (!isNaN(val) && val >= 0 && val <= 1) setPathSpeedFactor(val);
+        if (!isNaN(val) && val >= 0 && val <= 1) pathManager.setSpeedFactor(val);
       }
-      if (pathSimplify) {
-        const val = parseFloat(pathSimplify.value);
-        if (!isNaN(val) && val >= 0) setPathSimplifyTolerance(val);
+
+      // Simplificación: si el checkbox está activo, usar el valor; si no, poner 0
+      if (pathSimplifyEnable && pathSimplify) {
+        if (pathSimplifyEnable.checked) {
+          const val = parseFloat(pathSimplify.value);
+          if (!isNaN(val) && val >= 0) {
+            pathManager.setSimplifyTolerance(val);
+          }
+        } else {
+          pathManager.setSimplifyTolerance(0);
+        }
+      }
+
+      // Aplicar configuraciones BQS
+      if (pathBqsEpsilon) {
+        const val = parseFloat(pathBqsEpsilon.value);
+        if (!isNaN(val) && val > 0) pathManager.setBqsEpsilonBase(val);
+      }
+      if (pathBqsSpeedFactor) {
+        const val = parseFloat(pathBqsSpeedFactor.value);
+        if (!isNaN(val) && val >= 0 && val <= 1) pathManager.setBqsSpeedFactor(val);
+      }
+      if (pathMinTime) {
+        const val = parseInt(pathMinTime.value);
+        if (!isNaN(val) && val >= 10) pathManager.setMinTimeBetweenPoints(val);
+      }
+      if (pathForceAngle) {
+        pathManager.setForceOnAngleChange(pathForceAngle.checked);
       }
 
       if (changed) {

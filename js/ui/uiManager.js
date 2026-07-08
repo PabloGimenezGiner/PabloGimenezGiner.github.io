@@ -7,6 +7,7 @@ import { pauseGameOnMenu, setPauseGameOnMenu, resetGameState, chunks } from '../
 import { saveGame } from '../core/persistence.js';
 import { constants } from '../constants.js';
 import { updateChunks } from '../world/chunkManager.js';
+import pathManager from '../render/path/pathManager.js';   // <-- NUEVO
 
 export default class UIManager {
   constructor(canvas) {
@@ -15,7 +16,7 @@ export default class UIManager {
     this._lockRequestPending = false;
     this._ignorePointerLockChange = false;
     this._isClosing = false;
-    this._statsInterval = null; // <-- para el intervalo de actualización
+    this._statsInterval = null;
 
     // Registrar menú
     this.windowManager.register('menu', {
@@ -102,7 +103,6 @@ export default class UIManager {
       y: 200,
       render: renderStats,
       onOpen: () => {
-        // Iniciar intervalo de actualización si no existe
         if (this._statsInterval) {
           clearInterval(this._statsInterval);
           this._statsInterval = null;
@@ -112,14 +112,12 @@ export default class UIManager {
           if (entry && entry.isOpen) {
             this.windowManager.updateContent('stats', renderStats);
           } else {
-            // Si la ventana se cerró inesperadamente, limpiar el intervalo
             clearInterval(this._statsInterval);
             this._statsInterval = null;
           }
-        }, 500); // Actualiza cada medio segundo
+        }, 500);
       },
       onClose: () => {
-        // Limpiar intervalo al cerrar la ventana
         if (this._statsInterval) {
           clearInterval(this._statsInterval);
           this._statsInterval = null;
@@ -281,6 +279,7 @@ export default class UIManager {
     
     console.log('🔄 Reiniciando posición...');
     resetGameState();
+    pathManager.clear();   // <-- NUEVO: limpiar la ruta al reiniciar
     
     setTimeout(() => {
       import('../core/gameState.js').then(({ camera }) => {

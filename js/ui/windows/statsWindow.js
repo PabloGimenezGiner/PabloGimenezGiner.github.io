@@ -1,11 +1,12 @@
 // ui/windows/statsWindow.js
-import { totalDistance, pathPoints, maxPathPoints, pathPersistent } from '../../core/gameState.js';
+import pathManager from '../../render/path/pathManager.js';
 
 export function renderStats() {
-  const distance = totalDistance;
-  const points = pathPoints.length;
-  const maxPoints = maxPathPoints;
-  const persistent = pathPersistent ? 'Sí' : 'No';
+  const stats = pathManager.getStats();
+  const distance = stats.totalDistance;
+  const points = stats.points;
+  const maxPoints = stats.maxPoints;
+  const persistent = stats.persistent ? 'Sí' : 'No';
   
   // Formatear distancia
   let distStr;
