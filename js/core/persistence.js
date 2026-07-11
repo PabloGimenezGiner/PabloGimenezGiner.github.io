@@ -1,12 +1,13 @@
 // core/persistence.js
 import {
   camera, settings, globalSeed, movementAutoBrake, rotationAutoDamp,
-  frustumCullingEnabled, showInfoHud, pauseGameOnMenu,
+  frustumCullingEnabled, showInfoHud, pauseGameOnMenu, runInBackground,
   setMovementAutoBrake, setRotationAutoDamp,
   setFrustumCulling, setShowInfoHud, setGlobalSeed, setPauseGameOnMenu,
+  setRunInBackground,
 } from './gameState.js';
 import { constants } from '../constants.js';
-import pathManager from '../render/path/pathManager.js';   // <-- NUEVO
+import pathManager from '../render/path/pathManager.js';
 
 const SAVE_KEY = 'spaceGameSave';
 const CONSTANTS_KEY = 'spaceGameConstants';
@@ -24,8 +25,8 @@ export function saveGame() {
     frustumCullingEnabled: frustumCullingEnabled,
     showInfoHud: showInfoHud,
     pauseGameOnMenu: pauseGameOnMenu,
+    runInBackground: runInBackground,   // <-- NUEVO
     globalSeed: globalSeed,
-    // Guardar datos del path manager
     pathData: pathManager.getData(),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
@@ -55,8 +56,8 @@ export function loadGame() {
     setFrustumCulling(data.frustumCullingEnabled ?? true);
     setShowInfoHud(data.showInfoHud ?? false);
     setPauseGameOnMenu(data.pauseGameOnMenu ?? true);
+    setRunInBackground(data.runInBackground ?? false);   // <-- NUEVO
     setGlobalSeed(data.globalSeed ?? Math.floor(Math.random() * 1000000));
-    // Restaurar datos del path manager
     if (data.pathData) {
       pathManager.restoreData(data.pathData);
     } else {

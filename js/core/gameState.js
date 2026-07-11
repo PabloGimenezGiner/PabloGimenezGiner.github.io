@@ -38,6 +38,7 @@ export let rotationAutoDamp = true;
 export let frustumCullingEnabled = true;
 export let showInfoHud = false;
 export let pauseGameOnMenu = true;
+export let runInBackground = false;   // <-- NUEVO
 
 export let angularVel = { yaw: 0, pitch: 0, roll: 0 };
 export const ROT_ACC = 4.0;
@@ -52,6 +53,7 @@ export function setFrustumCulling(value) { frustumCullingEnabled = value; }
 export function setShowInfoHud(value) { showInfoHud = value; }
 export function setGlobalSeed(value) { globalSeed = value; }
 export function setPauseGameOnMenu(value) { pauseGameOnMenu = value; }
+export function setRunInBackground(value) { runInBackground = value; }   // <-- NUEVO
 export function setAngularVel(yaw, pitch, roll) {
   angularVel.yaw = yaw;
   angularVel.pitch = pitch;
@@ -76,6 +78,5 @@ export function resetGameState() {
     delete chunks[key];
   }
   
-  // Ya no hay path aquí; se resetea en el pathManager
   console.log("🔄 Posición y chunks reiniciados (ajustes intactos)");
 }
