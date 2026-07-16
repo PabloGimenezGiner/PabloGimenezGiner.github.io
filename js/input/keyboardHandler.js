@@ -1,4 +1,5 @@
 // input/keyboardHandler.js
+
 export default class KeyboardHandler {
     constructor(inputManager) {
         this.inputManager = inputManager;
@@ -123,7 +124,6 @@ export default class KeyboardHandler {
                 this.inputManager.onMouseWheel(-1);
                 return;
             }
-            // ESC: lo dejamos como respaldo, pero la lógica principal está en pointerlockchange
             if (code === 'Escape') {
                 if (this.uiManager) {
                     this.uiManager.toggleMenu();

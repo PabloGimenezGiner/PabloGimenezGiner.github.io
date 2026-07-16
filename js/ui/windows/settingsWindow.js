@@ -1,8 +1,35 @@
 // ui/windows/settingsWindow.js
-import { constants } from '../../constants.js';
-import { saveConstants, resetConstantsToDefaults } from '../../core/persistence.js';
+import { CONFIG, constants, resetConstantsToDefaults } from '../../constants.js';
+import { saveConstants } from '../../core/persistence.js';
+import { gameState, setRunInBackground } from '../../core/state.js';
 import pathManager from '../../render/path/pathManager.js';
-import { runInBackground, setRunInBackground } from '../../core/gameState.js';
+
+// ===== Mapeo de nombres legibles para las constantes =====
+const constNames = {
+  inicVZ: 'Velocidad inicial Z',
+  inicAccFactor: 'Factor de aceleración inicial',
+  normAccMin: 'Aceleración normal (mínima)',
+  normAccMax: 'Aceleración normal (máxima)',
+  turbAccMin: 'Aceleración turbo (mínima)',
+  turbAccMax: 'Aceleración turbo (máxima)',
+  normBaseDecel: 'Desaceleración base',
+  FOV: 'Campo de visión (FOV)',
+  renderDistanceChunks: 'Distancia de renderizado (chunks)',
+  chunkSize: 'Tamaño de chunk',
+  starsPerChunk: 'Estrellas por chunk',
+  LOD_NEAR_DIST: 'Distancia LOD cercana',
+  LOD_MID_DIST: 'Distancia LOD media',
+  nearStarBrightnessBoost: 'Brillo estrellas cercanas',
+  midStarBrightnessBoost: 'Brillo estrellas medias',
+  farStarBrightnessBoost: 'Brillo estrellas lejanas',
+  directionalSpeedFactor: 'Factor velocidad direccional',
+  directionalMinBright: 'Brillo direccional mínimo',
+  directionalMaxBright: 'Brillo direccional máximo',
+  STAR_SIZE_NEAR: 'Tamaño estrellas cercanas',
+  STAR_SIZE_MID: 'Tamaño estrellas medias',
+  STAR_SIZE_FAR: 'Tamaño estrellas lejanas',
+  STAR_SIZE_FAR_MIN: 'Tamaño mínimo estrellas lejanas',
+};
 
 // ===== Generar campos de entrada para constantes =====
 function generateInputs() {
@@ -19,7 +46,7 @@ function generateInputs() {
       keys: ['FOV', 'renderDistanceChunks', 'chunkSize', 'starsPerChunk']
     },
     {
-      title: '📏 LOD (Niveles de detalle)',
+      title: '📏 Niveles de detalle (LOD)',
       keys: ['LOD_NEAR_DIST', 'LOD_MID_DIST']
     },
     {
@@ -27,7 +54,7 @@ function generateInputs() {
       keys: ['nearStarBrightnessBoost', 'midStarBrightnessBoost', 'farStarBrightnessBoost']
     },
     {
-      title: '🧭 Brillo direccional',
+      title: '🧭 Brillo direccional (por velocidad)',
       keys: ['directionalSpeedFactor', 'directionalMinBright', 'directionalMaxBright']
     },
     {
@@ -44,9 +71,10 @@ function generateInputs() {
       const step = (typeof value === 'number' && !Number.isInteger(value)) ? '0.1' : '1';
       const min = (key.includes('Min') || key.includes('_MIN')) ? '0' : '1';
       const max = (key.includes('Max') || key.includes('_MAX')) ? '9999' : '9999';
+      const label = constNames[key] || key; // Si no tiene nombre, usar la clave
       html += `
         <div style="display:flex; align-items:center; margin:4px 0;">
-          <label style="width:180px; font-size:13px; color:#aaa;">${key}</label>
+          <label style="width:200px; font-size:13px; color:#aaa;">${label}</label>
           <input type="number" id="const-${key}" value="${value}" step="${step}" min="${min}" max="${max}"
                  style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
         </div>
@@ -69,11 +97,11 @@ export function renderSettings() {
 
       <h4 style="margin:16px 0 8px 0; color:#ccc;">⚡ Rendimiento</h4>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Ejecutar en 2º plano</label>
-        <input type="checkbox" id="run-background" ${runInBackground ? 'checked' : ''}
+        <label style="width:200px; font-size:13px; color:#aaa;">Ejecutar en 2º plano</label>
+        <input type="checkbox" id="run-background" ${gameState.flags.runInBackground ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
-      <div style="font-size:11px; color:#666; margin-left:180px; margin-top:-2px; margin-bottom:8px;">
+      <div style="font-size:11px; color:#666; margin-left:200px; margin-top:-2px; margin-bottom:8px;">
         ⚠️ El navegador limita los temporizadores en segundo plano (~1s entre ticks)
       </div>
 
@@ -83,40 +111,40 @@ export function renderSettings() {
 
       <!-- Activación y visibilidad -->
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Activar ruta</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Activar ruta</label>
         <input type="checkbox" id="path-enabled" ${p.enabled ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Mostrar ruta</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Mostrar ruta</label>
         <input type="checkbox" id="path-visible" ${p.visible ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Ruta persistente</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Ruta persistente</label>
         <input type="checkbox" id="path-persistent" ${p.persistent ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
 
       <!-- Filtro de aceptación -->
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Distancia base</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Distancia base</label>
         <input type="number" id="path-basedist" value="${p.baseDist}" min="0.1" max="100" step="0.5"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Factor velocidad</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Factor velocidad</label>
         <input type="number" id="path-speedfactor" value="${p.speedFactor}" min="0" max="1" step="0.05"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Umbral ángulo (coseno)</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Umbral ángulo (coseno)</label>
         <input type="number" id="path-anglethreshold" value="${p.angleThreshold}" min="0.5" max="1" step="0.01"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
         <span style="font-size:10px; color:#666; margin-left:6px;">(1=recto, 0=giro 90°)</span>
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Intervalo mínimo (ms)</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Intervalo mínimo (ms)</label>
         <input type="number" id="path-mintime" value="${p.minTimeBetweenPoints}" min="10" max="500" step="10"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
@@ -124,17 +152,17 @@ export function renderSettings() {
       <!-- LOD de renderizado -->
       <h5 style="margin:12px 0 6px 0; color:#888;">Nivel de detalle (LOD) en renderizado</h5>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Subdiv. máximas (cerca)</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Subdiv. máximas (cerca)</label>
         <input type="number" id="path-lodmaxsubdivs" value="${p.lodMaxSubdivs}" min="2" max="40" step="1"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Subdiv. mínimas (lejos)</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Subdiv. mínimas (lejos)</label>
         <input type="number" id="path-lodminsubdivs" value="${p.lodMinSubdivs}" min="1" max="20" step="1"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Distancia máxima LOD</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Distancia máxima LOD</label>
         <input type="number" id="path-lodmaxdist" value="${p.lodMaxDist}" min="100" max="50000" step="100"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
       </div>
@@ -142,18 +170,18 @@ export function renderSettings() {
       <!-- Simplificación Douglas-Peucker -->
       <h5 style="margin:12px 0 6px 0; color:#888;">Simplificación (Douglas-Peucker)</h5>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Activar simplificación</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Activar simplificación</label>
         <input type="checkbox" id="path-simplify-enable" ${p.simplifyEnabled ? 'checked' : ''}
                style="width:20px; height:20px; cursor:pointer;">
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Tolerancia</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Tolerancia</label>
         <input type="number" id="path-simplify-tolerance" value="${p.simplifyTolerance}" min="0" max="10" step="0.1"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;"
                ${p.simplifyEnabled ? '' : 'disabled'}>
       </div>
       <div style="display:flex; align-items:center; margin:4px 0;">
-        <label style="width:180px; font-size:13px; color:#aaa;">Ventana de puntos</label>
+        <label style="width:200px; font-size:13px; color:#aaa;">Ventana de puntos</label>
         <input type="number" id="path-simplify-window" value="${p.simplifyWindow}" min="0" max="500" step="10"
                style="flex:1; padding:4px 8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:#fff; font-family:monospace; font-size:13px;">
         <span style="font-size:10px; color:#666; margin-left:6px;">(0 = aplicar a toda la ruta)</span>
@@ -362,6 +390,12 @@ export function setupSettingsEvents(container, onApply) {
         const simplifyTolerance = container.querySelector('#path-simplify-tolerance');
         if (simplifyEnable && simplifyTolerance) {
           simplifyTolerance.disabled = !simplifyEnable.checked;
+        }
+
+        // Actualizar checkbox de background (se lee de gameState)
+        const runBg = container.querySelector('#run-background');
+        if (runBg) {
+          runBg.checked = gameState.flags.runInBackground;
         }
 
         if (onApply) onApply();

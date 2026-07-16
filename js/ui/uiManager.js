@@ -3,11 +3,11 @@ import { WindowManager } from './windowManager.js';
 import { renderMenu, setupMenuEvents } from './windows/menuWindow.js';
 import { renderSettings, setupSettingsEvents } from './windows/settingsWindow.js';
 import { renderStats } from './windows/statsWindow.js';
-import { pauseGameOnMenu, setPauseGameOnMenu, resetGameState, chunks } from '../core/gameState.js';
+import { gameState, setPauseGameOnMenu, resetGameState } from '../core/state.js';
 import { saveGame } from '../core/persistence.js';
-import { constants } from '../constants.js';
+import { CONFIG } from '../constants.js';
 import { updateChunks } from '../world/chunkManager.js';
-import pathManager from '../render/path/pathManager.js';   // <-- NUEVO
+import pathManager from '../render/path/pathManager.js';
 
 export default class UIManager {
   constructor(canvas) {
@@ -42,7 +42,7 @@ export default class UIManager {
           togglePause: () => this._togglePauseMode(),
         });
         
-        if (pauseGameOnMenu && this.onPause) {
+        if (gameState.flags.pauseGameOnMenu && this.onPause) {
           this.onPause();
         }
         
@@ -55,7 +55,7 @@ export default class UIManager {
         }, 150);
       },
       onClose: () => {
-        if (pauseGameOnMenu && this.onResume) {
+        if (gameState.flags.pauseGameOnMenu && this.onResume) {
           this.onResume();
         }
         this._isClosing = true;
@@ -128,9 +128,9 @@ export default class UIManager {
     this.onPause = null;
     this.onResume = null;
     this._lastChunkParams = {
-      renderDistanceChunks: constants.renderDistanceChunks,
-      chunkSize: constants.chunkSize,
-      starsPerChunk: constants.starsPerChunk
+      renderDistanceChunks: CONFIG.rendering.renderDistanceChunks,
+      chunkSize: CONFIG.rendering.chunkSize,
+      starsPerChunk: CONFIG.rendering.starsPerChunk
     };
 
     document.addEventListener('pointerlockchange', this._onPointerLockChange.bind(this));
@@ -139,14 +139,15 @@ export default class UIManager {
   _updateMenuContent(container) {
     const pauseBtn = container.querySelector('[data-action="togglePause"]');
     if (pauseBtn) {
-      const icon = pauseGameOnMenu ? '⏸️' : '▶️';
-      const label = pauseGameOnMenu ? 'Pausa: Activada' : 'Pausa: Desactivada';
+      const isPaused = gameState.flags.pauseGameOnMenu;
+      const icon = isPaused ? '⏸️' : '▶️';
+      const label = isPaused ? 'Pausa: Activada' : 'Pausa: Desactivada';
       pauseBtn.textContent = `${icon} ${label}`;
     }
   }
 
   _togglePauseMode() {
-    const newValue = !pauseGameOnMenu;
+    const newValue = !gameState.flags.pauseGameOnMenu;
     setPauseGameOnMenu(newValue);
     console.log(`Modo pausa: ${newValue ? 'Activado' : 'Desactivado'}`);
     saveGame();
@@ -166,9 +167,9 @@ export default class UIManager {
 
   _regenerateChunksIfNeeded() {
     const current = {
-      renderDistanceChunks: constants.renderDistanceChunks,
-      chunkSize: constants.chunkSize,
-      starsPerChunk: constants.starsPerChunk
+      renderDistanceChunks: CONFIG.rendering.renderDistanceChunks,
+      chunkSize: CONFIG.rendering.chunkSize,
+      starsPerChunk: CONFIG.rendering.starsPerChunk,
     };
     const changed = (
       current.renderDistanceChunks !== this._lastChunkParams.renderDistanceChunks ||
@@ -177,12 +178,11 @@ export default class UIManager {
     );
     if (changed) {
       console.log('🔄 Parámetros de chunks cambiados, regenerando...');
+      const chunks = gameState.world.chunks;
       for (const key in chunks) {
         delete chunks[key];
       }
-      import('../core/gameState.js').then(({ camera }) => {
-        updateChunks(camera.x, camera.y, camera.z);
-      });
+      updateChunks(gameState.camera.x, gameState.camera.y, gameState.camera.z);
       this._lastChunkParams = current;
     }
   }
@@ -279,12 +279,10 @@ export default class UIManager {
     
     console.log('🔄 Reiniciando posición...');
     resetGameState();
-    pathManager.clear();   // <-- NUEVO: limpiar la ruta al reiniciar
+    pathManager.clear();
     
     setTimeout(() => {
-      import('../core/gameState.js').then(({ camera }) => {
-        updateChunks(camera.x, camera.y, camera.z);
-      });
+      updateChunks(gameState.camera.x, gameState.camera.y, gameState.camera.z);
     }, 50);
     
     setTimeout(() => saveGame(), 100);

@@ -1,4 +1,7 @@
-// render/path/pathManager.js
+/**
+ * @fileoverview Gestor de la ruta del jugador: almacenamiento circular,
+ * filtrado de puntos, simplificación Douglas-Peucker y persistencia.
+ */
 
 class PathManager {
   constructor() {
@@ -24,8 +27,7 @@ class PathManager {
     // Simplificación (Douglas-Peucker)
     this.simplifyEnabled = false;
     this.simplifyTolerance = 1.0;
-    // simplifyWindow ya no se usa para la simplificación, se mantiene por compatibilidad
-    this.simplifyWindow = 100;
+    this.simplifyWindow = 100; // Ya no se usa, se mantiene por compatibilidad
 
     // Estado interno
     this._lastTimestamp = 0;
@@ -62,10 +64,18 @@ class PathManager {
   }
 
   // ========== SETTERS ==========
+
+  /** @param {boolean} v */
   setEnabled(v) { this.enabled = v; }
+  /** @param {boolean} v */
   setVisible(v) { this.visible = v; }
+  /** @param {boolean} v */
   setPersistent(v) { this.persistent = v; }
 
+  /**
+   * Establece el número máximo de puntos en el buffer.
+   * @param {number} v - Nuevo máximo (entre 10 y ABSOLUTE_MAX).
+   */
   setMaxPoints(v) {
     const newMax = Math.max(10, Math.min(this.ABSOLUTE_MAX, v));
     if (newMax === this.maxPoints) return;
@@ -88,22 +98,36 @@ class PathManager {
     this._dirty = true;
   }
 
+  /** @param {number} v - Distancia base (>= 0.1) */
   setBaseDist(v) { this.baseDist = Math.max(0.1, v); }
+  /** @param {number} v - Factor velocidad (0..1) */
   setSpeedFactor(v) { this.speedFactor = Math.max(0, Math.min(1, v)); }
+  /** @param {number} v - Umbral ángulo (0.5..1) */
   setAngleThreshold(v) { this.angleThreshold = Math.max(0.5, Math.min(1, v)); }
+  /** @param {number} v - Tiempo mínimo entre puntos (>= 10 ms) */
   setMinTimeBetweenPoints(v) { this.minTimeBetweenPoints = Math.max(10, v); }
+  /** @param {number} v - Subdivisiones máximas (>= 1) */
   setLodMaxSubdivs(v) { this.lodMaxSubdivs = Math.max(1, v); }
+  /** @param {number} v - Subdivisiones mínimas (>= 1, <= lodMaxSubdivs) */
   setLodMinSubdivs(v) { this.lodMinSubdivs = Math.max(1, Math.min(this.lodMaxSubdivs, v)); }
+  /** @param {number} v - Distancia máxima para LOD (>= 10) */
   setLodMaxDist(v) { this.lodMaxDist = Math.max(10, v); }
+  /** @param {boolean} v */
   setSimplifyEnabled(v) { this.simplifyEnabled = v; this._dirty = true; }
+  /** @param {number} v - Tolerancia (>= 0) */
   setSimplifyTolerance(v) { this.simplifyTolerance = Math.max(0, v); this._dirty = true; }
+  /**
+   * @deprecated Ya no se usa; la simplificación se aplica a toda la ruta.
+   * @param {number} v - Ventana de puntos (se ignora).
+   */
   setSimplifyWindow(v) {
-    // Ya no se usa, pero mantenemos por compatibilidad
     this.simplifyWindow = Math.max(0, v);
     console.warn('simplifyWindow ya no se usa; la simplificación se aplica siempre a toda la ruta.');
   }
 
   // ========== RESET A VALORES POR DEFECTO ==========
+
+  /** Restaura todos los parámetros a sus valores por defecto y limpia la ruta. */
   resetToDefaults() {
     this.baseDist = this._defaults.baseDist;
     this.speedFactor = this._defaults.speedFactor;
@@ -134,6 +158,8 @@ class PathManager {
   }
 
   // ========== RECALCULAR DISTANCIA TOTAL ==========
+
+  /** @private */
   _recalcTotalDistance() {
     if (this._count < 2) {
       this.totalDistance = 0;
@@ -152,6 +178,14 @@ class PathManager {
   }
 
   // ========== ESCRITURA DE PUNTO (CON CORRECCIÓN DE DISTANCIA) ==========
+
+  /**
+   * Escribe un punto en el buffer circular, actualizando la distancia total.
+   * @param {number} x - Coordenada X.
+   * @param {number} y - Coordenada Y.
+   * @param {number} z - Coordenada Z.
+   * @private
+   */
   _writePointInternal(x, y, z) {
     const idx = this._head * 3;
     if (this._count === this.maxPoints) {
@@ -186,6 +220,15 @@ class PathManager {
   }
 
   // ========== MÉTODO PRINCIPAL ==========
+
+  /**
+   * Añade un punto a la ruta si cumple los criterios de distancia, ángulo y tiempo.
+   * @param {number} x - Coordenada X.
+   * @param {number} y - Coordenada Y.
+   * @param {number} z - Coordenada Z.
+   * @param {number} speed - Velocidad actual (se usa para ajustar la distancia mínima).
+   * @returns {boolean} true si el punto fue aceptado y añadido.
+   */
   addPoint(x, y, z, speed) {
     if (!this.enabled) return false;
 
@@ -239,6 +282,11 @@ class PathManager {
   }
 
   // ========== OBTENER PUNTOS PARA RENDERIZAR ==========
+
+  /**
+   * Devuelve los puntos listos para renderizar, aplicando simplificación si está activada.
+   * @returns {Float32Array|null} Array plano [x,y,z, x,y,z, ...] o null si no hay puntos.
+   */
   getRenderPoints() {
     if (!this.visible || this._count < 2) return null;
 
@@ -255,6 +303,10 @@ class PathManager {
     return this._getOrderedPoints();
   }
 
+  /**
+   * @returns {Float32Array|null} Puntos en orden desde el más antiguo al más nuevo.
+   * @private
+   */
   _getOrderedPoints() {
     if (this._count === 0) return null;
     const result = new Float32Array(this._count * 3);
@@ -269,6 +321,12 @@ class PathManager {
   }
 
   // ===== SIMPLIFICACIÓN DOUGLAS-PEUCKER (CORREGIDA) =====
+
+  /**
+   * Aplica el algoritmo Douglas-Peucker a toda la ruta.
+   * @returns {Float32Array} Array con los puntos simplificados.
+   * @private
+   */
   _computeSimplified() {
     const full = this._getOrderedPoints();
     if (!full || full.length < 6) return full;
@@ -276,15 +334,21 @@ class PathManager {
     let data = full;
     let count = full.length / 3;
 
-    // Si la tolerancia es 0 o no hay suficientes puntos, devolver sin simplificar
     if (this.simplifyTolerance <= 0 || count <= 2) {
       return data;
     }
 
-    // Simplificamos TODA la ruta (ignoramos simplifyWindow)
     return this._simplifyDP(data, count, this.simplifyTolerance);
   }
 
+  /**
+   * Implementación recursiva iterativa de Douglas-Peucker.
+   * @param {Float32Array} data - Puntos [x,y,z, ...].
+   * @param {number} count - Número de puntos.
+   * @param {number} tolerance - Tolerancia de simplificación.
+   * @returns {Float32Array} Puntos simplificados.
+   * @private
+   */
   _simplifyDP(data, count, tolerance) {
     const stack = [];
     const keep = new Uint8Array(count);
@@ -356,6 +420,8 @@ class PathManager {
   }
 
   // ========== LIMPIEZA Y ESTADÍSTICAS ==========
+
+  /** Elimina todos los puntos de la ruta. */
   clear() {
     this._data.fill(0);
     this._count = 0;
@@ -370,6 +436,10 @@ class PathManager {
     this._lastTimestamp = 0;
   }
 
+  /**
+   * Obtiene estadísticas de la ruta.
+   * @returns {{totalDistance: number, points: number, maxPoints: number, persistent: boolean}}
+   */
   getStats() {
     return {
       totalDistance: this.totalDistance,
@@ -380,6 +450,11 @@ class PathManager {
   }
 
   // ========== PERSISTENCIA ==========
+
+  /**
+   * Serializa el estado de la ruta para persistencia.
+   * @returns {Object} Objeto con todos los datos necesarios para restaurar la ruta.
+   */
   getData() {
     const ordered = this._getOrderedPoints();
     const arr = ordered ? Array.from(ordered) : [];
@@ -403,6 +478,10 @@ class PathManager {
     };
   }
 
+  /**
+   * Restaura la ruta desde un objeto de datos (cargado de localStorage).
+   * @param {Object} data - Datos previamente serializados con getData().
+   */
   restoreData(data) {
     if (data.points && Array.isArray(data.points)) {
       const arr = data.points;

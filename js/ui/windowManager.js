@@ -1,6 +1,12 @@
-// ui/windowManager.js
+/**
+ * @fileoverview Gestor de ventanas modales con soporte para arrastre,
+ * enfoque y renderizado dinámico.
+ */
 
 export class WindowManager {
+  /**
+   * @param {string} containerId - ID del elemento contenedor (por defecto 'ui-root').
+   */
   constructor(containerId = 'ui-root') {
     this.container = document.getElementById(containerId);
     if (!this.container) {
@@ -9,6 +15,7 @@ export class WindowManager {
       document.body.appendChild(this.container);
     }
 
+    /** @type {Map<string, Object>} */
     this.windows = new Map();
     this.zIndexCounter = 1000;
     this.dragData = null;
@@ -20,6 +27,20 @@ export class WindowManager {
     this.container.addEventListener('mousedown', this._onContainerMouseDown.bind(this));
   }
 
+  /**
+   * Registra una nueva ventana con su configuración.
+   * @param {string} id - Identificador único de la ventana.
+   * @param {Object} config - Configuración de la ventana.
+   * @param {string} config.title - Título de la ventana.
+   * @param {Function} config.render - Función que devuelve el HTML del contenido.
+   * @param {Function} [config.onOpen] - Callback al abrir.
+   * @param {Function} [config.onClose] - Callback al cerrar.
+   * @param {number} [config.width=400] - Ancho en píxeles.
+   * @param {number} [config.height=300] - Alto en píxeles.
+   * @param {number} [config.x=100] - Posición X inicial.
+   * @param {number} [config.y=100] - Posición Y inicial.
+   * @param {boolean} [config.resizable=false] - (pendiente) Indica si es redimensionable.
+   */
   register(id, config) {
     if (this.windows.has(id)) {
       console.warn(`Ventana "${id}" ya registrada.`);
@@ -44,7 +65,12 @@ export class WindowManager {
     console.log(`📦 Ventana "${id}" registrada`);
   }
 
-  // ---- open con force ----
+  /**
+   * Abre una ventana registrada.
+   * @param {string} id - Identificador de la ventana.
+   * @param {*} [data] - Datos opcionales que se pasan a la función render.
+   * @param {boolean} [force=false] - Si es true, recrea la ventana aunque ya esté abierta.
+   */
   open(id, data = null, force = false) {
     const entry = this.windows.get(id);
     if (!entry) {
@@ -52,17 +78,14 @@ export class WindowManager {
       return;
     }
 
-    // Si ya está abierta y no forzamos, solo enfocar
     if (entry.isOpen && !force) {
       console.log(`ℹ️ Ventana "${id}" ya abierta, enfocando.`);
       this.focus(id);
       return;
     }
 
-    // Si forzamos y está abierta, la cerramos y la recreamos
     if (force && entry.isOpen) {
       console.log(`🔄 Forzando recreación de "${id}"`);
-      // Eliminar el elemento del DOM si existe
       if (entry.element && entry.element.parentNode) {
         entry.element.parentNode.removeChild(entry.element);
         entry.element = null;
@@ -70,7 +93,6 @@ export class WindowManager {
       entry.isOpen = false;
     }
 
-    // Crear la ventana
     const { config } = entry;
     const el = this._createWindowElement(id, config, data);
     this.container.appendChild(el);
@@ -87,6 +109,10 @@ export class WindowManager {
     console.log(`✅ Ventana "${id}" abierta${force ? ' (forzada)' : ''}`);
   }
 
+  /**
+   * Cierra una ventana abierta.
+   * @param {string} id - Identificador de la ventana.
+   */
   close(id) {
     const entry = this.windows.get(id);
     if (!entry || !entry.isOpen) {
@@ -106,6 +132,10 @@ export class WindowManager {
     }, 200);
   }
 
+  /**
+   * Enfoca una ventana (la trae al frente).
+   * @param {string} id - Identificador de la ventana.
+   */
   focus(id) {
     const entry = this.windows.get(id);
     if (!entry || !entry.isOpen) return;
@@ -116,12 +146,43 @@ export class WindowManager {
     console.log(`🔝 Ventana "${id}" enfocada (z-index: ${this.zIndexCounter})`);
   }
 
+  /**
+   * Cierra todas las ventanas abiertas.
+   */
   closeAll() {
     for (const [id, entry] of this.windows.entries()) {
       if (entry.isOpen) this.close(id);
     }
   }
 
+  /**
+   * Actualiza el contenido de una ventana sin cerrarla.
+   * @param {string} id - Identificador de la ventana.
+   * @param {string|Function} newContent - Nuevo HTML o función que lo genera.
+   */
+  updateContent(id, newContent) {
+    const entry = this.windows.get(id);
+    if (!entry || !entry.isOpen) return;
+    const contentEl = entry.element.querySelector('.content');
+    if (contentEl) {
+      if (typeof newContent === 'function') {
+        contentEl.innerHTML = newContent();
+      } else {
+        contentEl.innerHTML = newContent;
+      }
+    }
+  }
+
+  // ---- Métodos privados ----
+
+  /**
+   * Crea el elemento DOM de una ventana.
+   * @param {string} id - Identificador de la ventana.
+   * @param {Object} config - Configuración de la ventana.
+   * @param {*} data - Datos para el render.
+   * @returns {HTMLElement} El elemento contenedor de la ventana.
+   * @private
+   */
   _createWindowElement(id, config, data) {
     const wrapper = document.createElement('div');
     wrapper.className = 'ui-window';
@@ -179,6 +240,11 @@ export class WindowManager {
     return wrapper;
   }
 
+  /**
+   * Manejador de arrastre (mousemove).
+   * @param {MouseEvent} e - Evento de ratón.
+   * @private
+   */
   _onDragMove(e) {
     if (!this.dragData) return;
     const { id, offsetX, offsetY } = this.dragData;
@@ -195,7 +261,11 @@ export class WindowManager {
     entry.config.y = newY;
   }
 
-  _onDragEnd(e) {
+  /**
+   * Manejador de final de arrastre (mouseup).
+   * @private
+   */
+  _onDragEnd() {
     if (this.dragData) {
       document.removeEventListener('mousemove', this._boundOnDragMove);
       document.removeEventListener('mouseup', this._boundOnDragEnd);
@@ -203,20 +273,11 @@ export class WindowManager {
     }
   }
 
-  _onContainerMouseDown(e) {
+  /**
+   * Evento de mousedown en el contenedor (actualmente vacío).
+   * @private
+   */
+  _onContainerMouseDown() {
     // No hace nada
-  }
-
-  updateContent(id, newContent) {
-    const entry = this.windows.get(id);
-    if (!entry || !entry.isOpen) return;
-    const contentEl = entry.element.querySelector('.content');
-    if (contentEl) {
-      if (typeof newContent === 'function') {
-        contentEl.innerHTML = newContent();
-      } else {
-        contentEl.innerHTML = newContent;
-      }
-    }
   }
 }

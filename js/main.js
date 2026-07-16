@@ -1,10 +1,6 @@
 // js/main.js
 import { ctx } from './canvas.js';
-import {
-  camera, settings, chunks, movementAutoBrake, rotationAutoDamp,
-  frustumCullingEnabled, showInfoHud, runInBackground,
-  setFrustumCulling, setShowInfoHud, setMovementAutoBrake, setRotationAutoDamp,
-} from './core/gameState.js';
+import { gameState, resetGameState, setFrustumCulling, setShowInfoHud, setMovementAutoBrake, setRotationAutoDamp } from './core/state.js';
 import { loadGame, loadConstants, startAutoSave } from './core/persistence.js';
 import { updateCamera, setInputManager } from './camera/cameraPhysics.js';
 import { updateChunks, generateChunk } from './world/chunkManager.js';
@@ -15,7 +11,8 @@ import pathManager from './render/path/pathManager.js';
 import { drawAllHuds } from './hud/hudManager.js';
 import InputManager from './input/inputManager.js';
 import UIManager from './ui/uiManager.js';
-import { constants } from './constants.js';
+import { CONFIG } from './constants.js';
+import { GameLoop } from './core/gameLoop.js';
 import { startRandomTitleAnimation, stopTitleAnimation } from './titleAnimator.js';
 
 // ===== INICIALIZACIÓN =====
@@ -30,12 +27,14 @@ let gamePaused = false;
 function pauseGame() {
   gamePaused = true;
   inputManager.setPaused(true);
+  if (gameLoop) gameLoop.pause();
   console.log("⏸️ Juego pausado");
 }
 
 function resumeGame() {
   gamePaused = false;
   inputManager.setPaused(false);
+  if (gameLoop) gameLoop.resume();
   console.log("▶️ Juego reanudado");
 }
 
@@ -45,10 +44,12 @@ uiManager.setPauseHandlers(pauseGame, resumeGame);
 loadGame();
 loadConstants();
 
-const startX = Math.floor(camera.x / constants.chunkSize);
-const startY = Math.floor(camera.y / constants.chunkSize);
-const startZ = Math.floor(camera.z / constants.chunkSize);
-const limit = constants.renderDistanceChunks;
+// Generar chunks iniciales
+const { camera, chunks } = gameState;
+const startX = Math.floor(camera.x / CONFIG.rendering.chunkSize);
+const startY = Math.floor(camera.y / CONFIG.rendering.chunkSize);
+const startZ = Math.floor(camera.z / CONFIG.rendering.chunkSize);
+const limit = CONFIG.rendering.renderDistanceChunks;
 const limitSq = limit * limit;
 
 for (let dx = -limit; dx <= limit; dx++) {
@@ -63,24 +64,28 @@ for (let dx = -limit; dx <= limit; dx++) {
 
 startAutoSave();
 
-// ===== SEPARAR UPDATE Y RENDER =====
+// ===== FUNCIONES DE ACTUALIZACIÓN Y RENDERIZADO =====
 function update(dt) {
+  const { camera, settings, flags, angularVel, world } = gameState;
+  const { frustumCullingEnabled, showInfoHud, movementAutoBrake, rotationAutoDamp } = flags;
+  const { chunks } = world;
+
   // ---- Consumir toggles e inputs ----
   if (inputManager.consumeTurboToggle()) {
     settings.turboEnabled = !settings.turboEnabled;
     if (settings.turboEnabled) {
-      settings.accFactor = Math.min(constants.turbAccMax, settings.accFactor * 8);
+      settings.accFactor = Math.min(CONFIG.physics.turboAccelerationRange.max, settings.accFactor * 8);
     } else {
-      settings.accFactor = Math.max(constants.normAccMin, settings.accFactor / 8);
+      settings.accFactor = Math.max(CONFIG.physics.normalAccelerationRange.min, settings.accFactor / 8);
     }
   }
 
   const powerDelta = inputManager.consumePowerDelta();
   if (powerDelta !== 0) {
-    const step = constants.mouseWheelStep * (settings.turboEnabled ? 8 : 1);
+    const step = CONFIG.physics.mouseWheelStep * (settings.turboEnabled ? 8 : 1);
     settings.accFactor += powerDelta * step;
-    const min = settings.turboEnabled ? constants.turbAccMin : constants.normAccMin;
-    const max = settings.turboEnabled ? constants.turbAccMax : constants.normAccMax;
+    const min = settings.turboEnabled ? CONFIG.physics.turboAccelerationRange.min : CONFIG.physics.normalAccelerationRange.min;
+    const max = settings.turboEnabled ? CONFIG.physics.turboAccelerationRange.max : CONFIG.physics.normalAccelerationRange.max;
     settings.accFactor = Math.max(min, Math.min(max, settings.accFactor));
   }
 
@@ -113,6 +118,10 @@ function update(dt) {
 }
 
 function render() {
+  const { camera, flags, world } = gameState;
+  const { showInfoHud } = flags;
+  const { chunks } = world;
+
   ctx.fillStyle = 'black';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -121,109 +130,58 @@ function render() {
   renderPath(ctx, camera);
 
   const chunkCount = Object.keys(chunks).length;
-  drawAllHuds(ctx, camera, inputManager, settings, currentFps, renderedStars, chunkCount);
+  // Pasamos currentFps desde el gameLoop
+  const fps = gameLoop ? gameLoop.currentFps : 60;
+  drawAllHuds(ctx, camera, inputManager, gameState.settings, fps, renderedStars, chunkCount);
 }
 
-// ===== VARIABLES DE BUCLE =====
-let rafId = null;
-let backgroundWorker = null;
-let isBackgroundMode = false;
-let last = performance.now();
-let frameCount = 0;
-let lastFpsUpdate = performance.now();
-let currentFps = 60;
+// ===== CREAR Y CONFIGURAR EL BUCLE =====
+let gameLoop = new GameLoop(update, render, {
+  fixedStep: 0.016,
+  maxDelta: 0.033
+});
 
-// ===== BUCLE PRINCIPAL (rAF) =====
-function rafLoop(now) {
-  const dt = Math.min(0.033, (now - last) / 1000);
-  last = now;
-
-  if (!gamePaused && !isBackgroundMode) {
-    update(dt);
-  }
-
-  render();
-  rafId = requestAnimationFrame(rafLoop);
-}
-
-// ===== FUNCIONES PARA EL WORKER =====
-function startBackgroundLoop() {
-  if (backgroundWorker) return;
-
-  backgroundWorker = new Worker('js/background-worker.js');
-
-  backgroundWorker.addEventListener('message', (e) => {
-    if (!isBackgroundMode || gamePaused) return;
-    let remaining = e.data;
-    const STEP = 0.016;
-    while (remaining > STEP) {
-      update(STEP);
-      remaining -= STEP;
-    }
-    if (remaining > 0) {
-      update(remaining);
-    }
-  });
-
-  backgroundWorker.postMessage('start');
-
-  // ===== INICIAR ANIMACIÓN DEL TÍTULO =====
-  // Ahora elige entre TODOS los modos de texto disponibles
-  const modes = [
-    'rotate', 'typewriter', 'scroll',
-    'wipe', 'replace', 'fade', 'counter', 'none'
-  ];
-  const randomMode = modes[Math.floor(Math.random() * modes.length)];
-  startRandomTitleAnimation(null, randomMode);
-  console.log(`🧵 Worker de background iniciado (título animado, modo: ${randomMode})`);
-}
-
-function stopBackgroundLoop() {
-  if (backgroundWorker) {
-    backgroundWorker.postMessage('stop');
-    backgroundWorker.terminate();
-    backgroundWorker = null;
-    stopTitleAnimation(true);
-    console.log('🧵 Worker de background detenido (título restaurado)');
-  }
-}
-
-// ===== DETECTAR CAMBIO DE VISIBILIDAD =====
+// ===== MANEJAR CAMBIO DE VISIBILIDAD (con runInBackground) =====
 document.addEventListener('visibilitychange', () => {
+  if (!gameLoop.isRunning()) return;
   if (document.hidden) {
-    if (runInBackground) {
-      isBackgroundMode = true;
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      startBackgroundLoop();
-      console.log('🌙 Modo background activado');
+    if (gameState.flags.runInBackground) {
+      gameLoop.enableBackground();
+      // Iniciar animación del título (background)
+      const modes = ['rotate', 'typewriter', 'scroll', 'wipe', 'replace', 'fade', 'counter', 'none'];
+      const randomMode = modes[Math.floor(Math.random() * modes.length)];
+      startRandomTitleAnimation(null, randomMode);
+      console.log(`🧵 Worker de background iniciado (título animado, modo: ${randomMode})`);
     } else {
-      isBackgroundMode = true;
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
+      // Pausar el bucle en lugar de usar worker
+      gameLoop.pause();
+      // También detener cualquier worker que pudiera estar activo (por si acaso)
+      if (gameLoop.isBackground()) {
+        gameLoop.disableBackground();
       }
-      stopBackgroundLoop();
       console.log('⏸️ Pestaña oculta, simulación pausada');
     }
   } else {
-    isBackgroundMode = false;
-    stopBackgroundLoop();
-    if (!rafId) {
-      last = performance.now();
-      rafLoop(last);
-      console.log('☀️ Pestaña visible, reanudando rAF');
+    // Pestaña visible
+    if (gameLoop.isBackground()) {
+      gameLoop.disableBackground();
+      stopTitleAnimation(true);
+      console.log('☀️ Pestaña visible, reanudando rAF (título restaurado)');
+    } else {
+      // Si estaba pausado, reanudar
+      if (gameLoop.isPaused()) {
+        gameLoop.resume();
+        console.log('☀️ Pestaña visible, reanudando simulación');
+      }
     }
   }
 });
 
 // ===== ARRANCAR EL JUEGO =====
-last = performance.now();
-rafLoop(last);
+gameLoop.start();
 
-window.camera = camera;
-window.chunks = chunks;
+// Exponer para depuración
+window.gameState = gameState;
 window.uiManager = uiManager;
+window.gameLoop = gameLoop;
 console.log('🚀 Simulación iniciada');
